@@ -6,7 +6,7 @@ const type = record => Object.getPrototypeOf(record).constructor;
 const Event = Object.assign(
     typename => (fields, name) =>
         Event.map[Event.count] = Object.assign(
-            Record(fields, `${typename}.${name}`),
+            NamedRecord(fields, `${typename}.${name}`),
             { id: Event.count++ }),
     { count: 0, map: [] });
 
@@ -50,12 +50,10 @@ function Cause(nameOrArray, declarations)
     const fields = toObject("field");
     const eventsIn = toObject("event.in", Event(typename));
     const eventsOut = toObject("event.out", Event(typename));
-    const type = Record(fields, typename);
+    const type = NamedRecord(fields, typename);
     const update = toCauseUpdate(definitions
         .get("event.on", List())
         .map(toEventUpdate(eventsIn)));
-
-    Object.defineProperty(type, "name", { value: typename });
 
     return Object.assign(type, { create, update }, eventsIn, eventsOut);
 }
@@ -74,7 +72,7 @@ function toEventUpdate(eventsIn)
 function toCauseUpdate(handlers)
 {
     return function update(state, event, source)
-    {console.log("here?");
+    {//console.log("here?");
         const etype = type(event);
         const match = handlers.find(({ on, from }) =>
             (on === false || on === etype.id) &&
@@ -83,7 +81,7 @@ function toCauseUpdate(handlers)
         if (!match)
             throw Error(
                 `${type(state).name} does not respond to ${etype.name}`);
-console.log(match.update + "" + type(state).name, match)
+//console.log(match.update + "" + type(state).name, match)
         const result = match.update(state, event, source);
 
         return Array.isArray(result) ? result : [result, []];
@@ -103,4 +101,13 @@ function declaration(previous, key, routes = { })
             { toString: () => JSON.stringify(toObject(value)) });
 
     return Object.assign(f, f("*"));
+}
+
+function NamedRecord(fields, name)
+{
+    const constructor = Record(fields, name);
+    
+    Object.defineProperty(constructor, "name", { value: name });
+    
+    return constructor;
 }

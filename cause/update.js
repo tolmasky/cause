@@ -1,31 +1,38 @@
+const { Record } = require("immutable");
 const type = state => Object.getPrototypeOf(state).constructor;
 
 
 module.exports = Object.assign(update, { in: updateIn });
 
 function update(state, event, source)
-{console.log("here " + type(state).name);
+{//console.log("here " + type(state).name);
     return type(state).update(state, event, source);
 }
 
 function updateIn(state, path, event, source)
-{console.log(arguments);
-    const pathArray = Array.isArray(path) ? path : [path];
+{//console.log(arguments);
+    const pathArray = typeof path === "string" ? [path] : Array.from(path);
 
     return updateInWithIndex(state, pathArray, 0, event, source);
 }
 
 function updateInWithIndex(state, path, index, event, source)
-{console.log("-->" + index, path);
+{
     if (index >= path.length)
         return update(state, event, source);
-console.log(type(state).name);
+/*
+    if (!(state instanceof Record))
+    {
+        console.log("NOPE: " + state);
+    }*/
+
     const component = path[index];
-    console.log(component);
+    //console.log(type(state).name, state);
     const child = state.get(component);
-    const [updatedChild, events] = updateInWithIndex(child, path, index + 1, event, source);
+    const [updatedChild, events] =
+        updateInWithIndex(child, path, index + 1, event, source);
     const updated = state.set(component, updatedChild);
-console.log(events);
+
     return events.reduce(function ([state, coallesced], event)
     {
         const [updated, events] = update(state, event, source);

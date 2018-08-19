@@ -1,4 +1,4 @@
-const { Iterable, List, Map, Record } = require("immutable");
+const { Collection, List, Map, Record, Range, Set } = require("immutable");
 const { Cause, field, event } = require("cause");
 const AsynchronousCause = require("./cause");
 const update = require("cause/update");
@@ -22,7 +22,9 @@ const Conductor = Cause("Conductor",
     [event.on (Cause.Start)](bridge, { keyPath, event })
     {
         const [updated, events] = update.in(bridge, "root", Cause.Start());
-console.log("oh");
+//console.log("oh");
+//console.log("+++", getAsynchronousCauses(updated));
+console.log(getAsynchronousCauses(updated.root.active));
         return [updateAsynchronousCauses(updated), events];
     },
     
@@ -67,11 +69,11 @@ function updateAsynchronousCauses(bridge)
             const cancel = start(asynchronousPush);
             const updatedCauses = causes.set(UUID, cancel);
 
-            const rootKeyPath = keyPath.pop();
+            const rootKeyPath = keyPath.parent;
             const source = root.getIn(rootKeyPath);
             const [updatedRoot, additionalEvents] =
                 update.in(root, rootKeyPath, event, source);
-
+console.log("THiS FR");
             const updatedEvents = additionalEvents.length > 0 ?
                 events ? additionalEvents : events.concat(additionalEvents) :
                 events;
@@ -86,24 +88,26 @@ function updateAsynchronousCauses(bridge)
         .set("asynchronousCauses", updatedCauses);
 }
 
-function getAsynchronousCauses(record)
+function getAsynchronousCauses(node)
 {
-    if (!record)
+    if (!canContainAsynchronousCauses(node)) { console.log("NO FOR " + (node && node.__proto__.constructor.name));
         return Map();
+}
+    if (!node._asynchronousCauses)
+        node._asynchronousCauses =
+            getComputedAsynchronousCauses(node);
 
-    if (!record._asynchronousCauses)
-        record._asynchronousCauses =
-            getComputedAsynchronousCauses(record);
-
-    return record._asynchronousCauses;
+    return node._asynchronousCauses;
 }
     
 function getComputedAsynchronousCauses(record)
 {
-    if (record instanceof require("@cause/pool"))
+    console.log("OK", record.__proto__.constructor.name);
+//if (record) console.log("COMPUTING " + record.__proto__.constructor.name, record, isKeyed(record));
+    if (record instanceof AsynchronousCause)
     {console.log("HERE", record);
-//        if (!record.awaitingRegistration)
-//            return Map();
+        if (!record.awaitingRegistration)
+            return Map();
 
         const { UUID="UUID", start } = record;
         const entry = new Entry(start);
@@ -112,34 +116,41 @@ function getComputedAsynchronousCauses(record)
         return Map({ [UUID]: value });
     }
 
-    if (record instanceof Iterable.Indexed ||
-        record instanceof Record)
+    const causes = record.keySeq()
+        .map(key => [getAsynchronousCauses(record.get(key)), key])
+        .map(([entries, key]) =>
+            entries.keySeq()
+                .map(UUID => [UUID, entries.get(UUID)])
+                .map(([UUID, entry]) => UUID === "unregistered" ?
+                    [UUID, entry.map(entry => entry.push(key))] :
+                    [UUID, entry.push(key)]))
+        .map(pairs => Map(pairs))
+        .reduce((union, entries) => union
+            .merge(entries)
+            .set("unregistered", union
+                .get("unregistered", List())
+                .concat(entries.get("unregistered", List()))),
+            Map());
+console.log(causes);
+    //console.log(union);
+    //console.log(groups);
+    if (record.__proto__.constructor.name === "Map")
     {
-        const pairs = record.keySeq()
-            .map(key => [getAsynchronousCauses(record.get(key)), key])
-            .map(([entries, key]) =>
-                entries.keySeq()
-                    .map(UUID => [UUID, entries.get(UUID)])
-                    .map(([UUID, entry]) => UUID === "unregistered" ?
-                        [UUID, entry.map(entry => entry.push(key))] :
-                        [UUID, entry.push(key)]));
-        console.log(pairs);
-        console.log("-->" + pairs.join("---"));
-        const groups = pairs.groupBy(pair =>
-            pair[0] === "unregistered" ? "unregistered" : "rest");
-        const union = Map(groups.get("rest").flatten());
-        console.log(union);
-        //console.log(groups);
-        const unregistered = groups.get("unregistered", List())
-            .map(pair => pair[1]);
-        
-        
-//console.log(unregistered);
-console.log(union.set("unregistered", unregistered));
-        return union.set("unregistered", unregistered);
+        console.log(record);
+        console.log(record.__proto__.constructor.name, causes);
     }
 
-    return Map();
+    return causes;
+}
+
+function canContainAsynchronousCauses(node)
+{
+    if (!node || typeof node !== "object")
+        return false;
+
+    return  node instanceof Record ||
+            node["@@__IMMUTABLE_KEYED__@@"] ||
+            node["@@__IMMUTABLE_INDEXED__@@"];
 }
 
 function Entry(start, keyPath)
@@ -150,7 +161,7 @@ function Entry(start, keyPath)
 
 Entry.prototype.toString = function ()
 {
-    return `Entry { ${Array.from(this.keyPath).join(", ")} }`;
+    return `Entry { ${this.keyPath} }`;
 }
 
 Entry.prototype.push = function (key)
@@ -162,9 +173,15 @@ Entry.prototype.push = function (key)
 
 function KeyPath(key, next)
 {
+    this.parent = next;
     this[Symbol.iterator] = function *()
     {
         yield key;
         next && (yield * next);
     }
+}
+
+KeyPath.prototype.toString = function ()
+{
+    return Array.from(this).join(", ");
 }

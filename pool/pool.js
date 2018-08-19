@@ -43,7 +43,7 @@ const Pool = Cause ("Pool",
             .set("free", free.concat(resources))
             .set("occupied", occupied.subtract(resources));
         const [allotted, events] = allot(released);
-console.log("RELEASED!", allotted);
+//console.log("RELEASED!", allotted);
         return [allotted, [Pool.Released({ resources }), ...events]];
     }
 });
