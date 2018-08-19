@@ -2,7 +2,7 @@
 const { field, state, event, Cause } = require("cause");
 
 
-
+console.log("MMM"+event.in(event.self));
 const AsynchronousCause = Cause("AsynchronousCause",
 {
     [field `UUID`]: "unregistered",
@@ -14,6 +14,8 @@ const AsynchronousCause = Cause("AsynchronousCause",
 
     [event.in `Register`]: { UUID: -1 },
     [event.out `Started`]: { },
+
+    [event.from(event.self)]: event.bubble,
 
     [event.on `Register`]: (cause, { UUID }) =>
     [

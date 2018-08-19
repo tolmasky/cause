@@ -1,6 +1,7 @@
 const { Record, List, Map } = require("immutable");
 const fromMaybeTemplate = input =>
-    typeof input === "string" ? input : input[0];
+    Array.isArray(input) ? input[0] : input;
+//    typeof input === "string" ? input : input[0];
 const type = record => Object.getPrototypeOf(record).constructor;
 
 const Event = Object.assign(
@@ -19,7 +20,8 @@ module.exports = Object.assign(Cause,
     event:
     {
         ignore: (state, event) => [state, []],
-        expose: (state, event) => [state, [event]],
+        bubble: (state, event) => [state, [event]],
+        self: { fromSelf: true },
         in: declaration("event.in", "name"),
         out: declaration("event.out", "name"),
         on: declaration("event.on", "on", { from:-1 }),
@@ -60,12 +62,16 @@ function Cause(nameOrArray, declarations)
 
 function toEventUpdate(eventsIn)
 {
-    return function ([{ on, from }, update])
+    return function ([{ on, from, name }, update])
     {
-        const id = !!on && on !== "*" &&
-            (typeof on === "string" ? eventsIn[on].id : on.id);
+        const fixedOn = !!on && on !== "*" &&
+            (typeof on === "string" ?
+                { name: eventsIn[on].name, id: eventsIn[on].id } :
+                on);
+        const fromSelf = from && from.fromSelf;
+        const fixedFrom = !fromSelf && from && [].concat(from);
 
-        return { on: id, from: from && [].concat(from), update };
+        return { on: fixedOn, name, fromSelf, from: fixedFrom, update };
     }
 }
 
@@ -74,16 +80,17 @@ function toCauseUpdate(handlers)
     return function update(state, event, source)
     {//console.log("here?");
         const etype = type(event);
-        const match = handlers.find(({ on, from }) =>
-            (on === false || on === etype.id) &&
+        const match = handlers.find(({ on, from, fromSelf }) =>
+            (on === false || on.id === etype.id) &&
+            (!fromSelf || state === source) &&
             (!from || state.getIn(from) === source));
-
+console.log(match, state, event);
         if (!match)
             throw Error(
                 `${type(state).name} does not respond to ${etype.name}`);
 //console.log(match.update + "" + type(state).name, match)
         const result = match.update(state, event, source);
-
+//console.log(result);
         return Array.isArray(result) ? result : [result, []];
     }
 }
@@ -94,7 +101,8 @@ function declaration(previous, key, routes = { })
         { kind: previous } : previous;
     const toObject = value =>
         ({ ...rest, [key]: value instanceof Function ? 
-            { id: value.id } : fromMaybeTemplate(value) });
+            { id: value.id, name: value.name } :
+            fromMaybeTemplate(value) });
     const f = value => Object.keys(routes)
         .reduce((object, key) => Object.assign(object,
             { [key]: declaration(toObject(value), key, routes[key]) }),

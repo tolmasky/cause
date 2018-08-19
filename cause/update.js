@@ -5,8 +5,13 @@ const type = state => Object.getPrototypeOf(state).constructor;
 module.exports = Object.assign(update, { in: updateIn });
 
 function update(state, event, source)
-{//console.log("here " + type(state).name);
-    return type(state).update(state, event, source);
+{
+    const update = type(state).update;
+
+    if (!update)
+        return [state, [event]];
+
+    return update(state, event, source);
 }
 
 function updateIn(state, path, event, source)
@@ -27,7 +32,6 @@ function updateInWithIndex(state, path, index, event, source)
     }*/
 
     const component = path[index];
-    //console.log(type(state).name, state);
     const child = state.get(component);
     const [updatedChild, events] =
         updateInWithIndex(child, path, index + 1, event, source);
@@ -37,7 +41,7 @@ function updateInWithIndex(state, path, index, event, source)
     {
         const [updated, events] = update(state, event, source);
         
-        return [updated, [coallesced, ...events]];
+        return [updated, [...coallesced, ...events]];
     }, [updated, []]);
 }
 

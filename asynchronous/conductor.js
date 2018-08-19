@@ -8,7 +8,7 @@ const Conductor = Cause("Conductor",
 {
     [field `nextAsynchronousCauseUUID`]: 0,
     [field `asynchronousCauses`]: Map(),
-    [field `push`]: () => { },
+    [field `asynchronousPush`]: () => { },
     [field `root`]: -1,
 
     init({ root, push })
@@ -16,7 +16,7 @@ const Conductor = Cause("Conductor",
         const asynchronousPush =
             (...args) => setImmediate(() => push(...args));
 
-        return { root, push: asynchronousPush }
+        return { root, asynchronousPush }
     },
 
     [event.on (Cause.Start)](bridge, { keyPath, event })
@@ -32,10 +32,13 @@ console.log(getAsynchronousCauses(updated.root.active));
     bridge =>
         [updateAsynchronousCauses(bridge), []],
 */
-    [event.in `AsynchronousEvent`]: { keyPath: List(), event: -1 },
+    [event.in `AsynchronousEvent`]: { keyPath:-1, event:-1 },
 
     [event.on `AsynchronousEvent`](bridge, { keyPath, event })
-    {
+    {console.log("HERE!");
+        const source = bridge.getIn(keyPath);
+        
+        console.log(keyPath+"", event)
         const [updated, events] = update.in(bridge, keyPath, event, source);
 
         return [updateAsynchronousCauses(updated), events]
@@ -54,7 +57,7 @@ function updateAsynchronousCauses(bridge)
 
     const unregisteredCauses = identifiedCauses.get("unregistered", List());
     const asynchronousPush = bridge.asynchronousPush;
-
+console.log("IT IS", asynchronousPush);
     const UUID = bridge.nextAsynchronousCauseUUID;
     const { AsynchronousEvent } = Conductor;
 
@@ -66,13 +69,13 @@ function updateAsynchronousCauses(bridge)
                 asynchronousPush(AsynchronousEvent({ keyPath, event }));
 
             const event = AsynchronousCause.Register({ UUID });
-            const cancel = start(asynchronousPush);
+            const cancel = start(push);
             const updatedCauses = causes.set(UUID, cancel);
 
             const rootKeyPath = keyPath.parent;
             const source = root.getIn(rootKeyPath);
             const [updatedRoot, additionalEvents] =
-                update.in(root, rootKeyPath, event, source);
+                update.in(root, rootKeyPath, event, null);
 console.log("THiS FR");
             const updatedEvents = additionalEvents.length > 0 ?
                 events ? additionalEvents : events.concat(additionalEvents) :
@@ -183,5 +186,5 @@ function KeyPath(key, next)
 
 KeyPath.prototype.toString = function ()
 {
-    return Array.from(this).join(", ");
+    return `@[ ${Array.from(this).map(key => JSON.stringify(key)).join(", ")} ]`;
 }
