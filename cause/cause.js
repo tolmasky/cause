@@ -29,6 +29,9 @@ module.exports = Object.assign(Cause,
     }
 });
 
+module.exports.update = require("./update");
+module.exports.IO = require("./io");
+
 function Cause(nameOrArray, declarations)
 {
     if (arguments.length < 2)
@@ -84,7 +87,7 @@ function toCauseUpdate(handlers)
             (on === false || on.id === etype.id) &&
             (!fromSelf || state === source) &&
             (!from || state.getIn(from) === source));
-console.log(match, state, event);
+//console.log(match, state, event);
         if (!match)
             throw Error(
                 `${type(state).name} does not respond to ${etype.name}`);

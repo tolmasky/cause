@@ -2,7 +2,6 @@
 const { field, state, event, Cause } = require("cause");
 
 
-console.log("MMM"+event.in(event.self));
 const AsynchronousCause = Cause("AsynchronousCause",
 {
     [field `UUID`]: "unregistered",
@@ -46,5 +45,13 @@ const AsynchronousCause = Cause("AsynchronousCause",
         ]
     }*/
 });
+
+AsynchronousCause.from = function (f, ...args)
+{
+    const start = push =>
+        Promise.resolve(f(args)).then(push);
+
+    return AsynchronousCause({ start })
+}
 
 module.exports = AsynchronousCause;

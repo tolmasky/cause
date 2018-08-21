@@ -1,33 +1,32 @@
-const Cause = require("cause");
-const update = require("cause/update");
-const Conductor = require("./conductor");
+const Cause = require("../cause");
+const update = require("../update");
+const Manager = require("./manager");
 
 
-module.exports = function run(root)
+module.exports = function toPromise(root)
 {
     const channel = { emit: () => { } };    
     const promise = new Promise(function (resolve, reject)
     {
-        let conductor = Conductor.create({ root, push });
-
-        push(Cause.Start());
-
-        function push(event)
+        const deferredPush = event => setImmediate(function ()
         {
-            const [updated, events] = update(conductor, event);
+            const [updated, events] = update(mutableManager, event);
             const finished = events.reduce((finished, event) =>
                 finished ||
                     void(channel.emit(event)) ||
-                    event instanceof Conductor.Finished && event,
+                    event instanceof Manager.Finished && event,
                 null);
 
             // THE ONLY MUTATION!
-            conductor = updated;
+            mutableManager = updated;
 
             if (finished)
                 (settle => settle(finished.value))
                     (finished.rejected ? reject : resolve);
-        }
+        });
+        let mutableManager = Manager.create({ root, deferredPush });
+
+        mutableManager.deferredPush(Cause.Start());
     });
 
     return Object.assign(promise, { channel });

@@ -1,25 +1,22 @@
 const { Record, Iterable, List, Range, Set } = require("immutable");
 const { Cause, event, field } = require("cause");
-const Allotment = Record({ request:-1, index:-1 }, "Allotment");
+const Allotment = Record({ request:-1, key:-1 }, "Allotment");
 
 
 const Pool = Cause ("Pool",
 {
     [field `backlog`]: List(),
-    [field `resources`]: List(),
+    [field `keys`]: List(),
     [field `free`]: List(),
     [field `occupied`]: Set(),
 
-    init({ resources: iterable })
+    init({ keys: iterable })
     {
-        const resources = Iterable.Indexed(iterable);
-        const free = Range(0, resources.size).toList();
+        const keys = Iterable.Indexed(iterable);
+        const free = Range(0, keys.size).toList();
 
-        return { resources, free };
+        return { keys, free };
     },
-
-    // Let all the events from the internal resources just bubble up.
-    [event.from("resources")]: event.bubble,
 
     // Users `enqueue` requests for resources, and we fire an event when
     // said resources are `allotted`.
@@ -32,19 +29,19 @@ const Pool = Cause ("Pool",
 
     // Users `release` resources, and in turn we fire events for the 
     // releases as well as the newly allowed allotments.
-    [event.in `Release`]: { resources: List() },
-    [event.out `Released`]: { resources: List() },
+    [event.in `Release`]: { keys: List() },
+    [event.out `Released`]: { keys: List() },
 
     // Free up the resources, then see if we can allot any of them.
-    [event.on `Release`](pool, { resources })
+    [event.on `Release`](pool, { keys })
     {
         const { free, backlog, occupied } = pool;
         const released = pool
-            .set("free", free.concat(resources))
-            .set("occupied", occupied.subtract(resources));
+            .set("free", free.concat(keys))
+            .set("occupied", occupied.subtract(keys));
         const [allotted, events] = allot(released);
 //console.log("RELEASED!", allotted);
-        return [allotted, [Pool.Released({ resources }), ...events]];
+        return [allotted, [Pool.Released({ keys }), ...events]];
     }
 });
 
@@ -52,7 +49,7 @@ module.exports = Pool;
 
 function allot(pool)
 {
-    const { backlog, free, occupied, resources } = pool;
+    const { backlog, free, occupied, keys } = pool;
 
     if (backlog.size <= 0 || free.size <= 0)
         return [pool, []];
@@ -65,7 +62,7 @@ function allot(pool)
         .set("occupied", occupied.concat(indexes));
 
     const allotments = dequeued.zipWith((request, index) =>
-        Allotment({ request, index }),
+        Allotment({ request, key: index }),
         indexes);
 
     return [updated, [Pool.Allotted({ allotments })]];

@@ -22,9 +22,7 @@ const Conductor = Cause("Conductor",
     [event.on (Cause.Start)](bridge, { keyPath, event })
     {
         const [updated, events] = update.in(bridge, "root", Cause.Start());
-//console.log("oh");
-//console.log("+++", getAsynchronousCauses(updated));
-console.log(getAsynchronousCauses(updated.root.active));
+
         return [updateAsynchronousCauses(updated), events];
     },
     
@@ -35,10 +33,8 @@ console.log(getAsynchronousCauses(updated.root.active));
     [event.in `AsynchronousEvent`]: { keyPath:-1, event:-1 },
 
     [event.on `AsynchronousEvent`](bridge, { keyPath, event })
-    {console.log("HERE!");
+    {
         const source = bridge.getIn(keyPath);
-        
-        console.log(keyPath+"", event)
         const [updated, events] = update.in(bridge, keyPath, event, source);
 
         return [updateAsynchronousCauses(updated), events]
@@ -57,7 +53,6 @@ function updateAsynchronousCauses(bridge)
 
     const unregisteredCauses = identifiedCauses.get("unregistered", List());
     const asynchronousPush = bridge.asynchronousPush;
-console.log("IT IS", asynchronousPush);
     const UUID = bridge.nextAsynchronousCauseUUID;
     const { AsynchronousEvent } = Conductor;
 
@@ -93,9 +88,9 @@ console.log("THiS FR");
 
 function getAsynchronousCauses(node)
 {
-    if (!canContainAsynchronousCauses(node)) { console.log("NO FOR " + (node && node.__proto__.constructor.name));
+    if (!canContainAsynchronousCauses(node))
         return Map();
-}
+
     if (!node._asynchronousCauses)
         node._asynchronousCauses =
             getComputedAsynchronousCauses(node);
@@ -105,10 +100,8 @@ function getAsynchronousCauses(node)
     
 function getComputedAsynchronousCauses(record)
 {
-    console.log("OK", record.__proto__.constructor.name);
-//if (record) console.log("COMPUTING " + record.__proto__.constructor.name, record, isKeyed(record));
     if (record instanceof AsynchronousCause)
-    {console.log("HERE", record);
+    {
         if (!record.awaitingRegistration)
             return Map();
 
@@ -134,14 +127,9 @@ function getComputedAsynchronousCauses(record)
                 .get("unregistered", List())
                 .concat(entries.get("unregistered", List()))),
             Map());
-console.log(causes);
+//console.log(causes);
     //console.log(union);
     //console.log(groups);
-    if (record.__proto__.constructor.name === "Map")
-    {
-        console.log(record);
-        console.log(record.__proto__.constructor.name, causes);
-    }
 
     return causes;
 }
