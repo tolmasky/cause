@@ -3,6 +3,7 @@ const fromMaybeTemplate = input =>
     Array.isArray(input) ? input[0] : input;
 //    typeof input === "string" ? input : input[0];
 const type = record => Object.getPrototypeOf(record).constructor;
+const ANY_STATE = { };
 
 const Event = Object.assign(
     typename => (fields, name) =>
@@ -25,8 +26,9 @@ module.exports = Object.assign(Cause,
         in: declaration("event.in", "name"),
         out: declaration("event.out", "name"),
         on: declaration("event.on", "on", { from:-1 }),
-        from: declaration("event.on", "from")
-    }
+        from: declaration("event.on", "from"),
+    },
+    state: declaration("state", "name")
 });
 
 module.exports.update = require("./update");
@@ -38,64 +40,88 @@ function Cause(nameOrArray, declarations)
         return declarations => Cause(nameOrArray, declarations);
 
     const typename = fromMaybeTemplate(nameOrArray);
-    const definitions = List(Object.keys(declarations))
-        .filter(key => key.charAt(0) === "{")
-        .map(key => [JSON.parse(key), declarations[key]])
-        .groupBy(([{ kind }]) => kind);
-
-    const toObject = (key, transform = x => x) =>
-        (pairs => Map(pairs).toObject())
-        ((definitions.get(key) || List())
-            .map(([parsed, value]) =>
-                [parsed.name, transform(value, parsed.name)]));
+    const definitions = getDefinitions(declarations);
 
     const init = declarations["init"];
-    const create = (...args) => 
+    const create = (...args) =>
         type(...(init ? [init(...args)] : args));
-    const fields = toObject("field");
-    const eventsIn = toObject("event.in", Event(typename));
-    const eventsOut = toObject("event.out", Event(typename));
+    const fields = definitions.toObject("field");
+    const eventsIn = definitions.toObject("event.in", Event(typename));
+    const eventsOut = definitions.toObject("event.out", Event(typename));
     const type = NamedRecord(fields, typename);
-    const update = toCauseUpdate(definitions
-        .get("event.on", List())
-        .map(toEventUpdate(eventsIn)));
+    const update = toCauseUpdate(eventsIn, definitions);
 
     return Object.assign(type, { create, update }, eventsIn, eventsOut);
 }
 
-function toEventUpdate(eventsIn)
+function getDefinitions(declarations)
 {
-    return function ([{ on, from, name }, update])
-    {
-        const fixedOn = !!on && on !== "*" &&
-            (typeof on === "string" ?
-                { name: eventsIn[on].name, id: eventsIn[on].id } :
-                on);
-        const fromSelf = from && from.fromSelf;
-        const fixedFrom = !fromSelf && from && [].concat(from);
+    const definitions = List(Object.keys(declarations))
+        .filter(key => key.charAt(0) === "{")
+        .map(key => [JSON.parse(key), declarations[key]])
+        .groupBy(([{ kind }]) => kind);
+    const toMap = (key, transform = x => x) =>
+        Map((definitions.get(key) || List())
+            .map(([parsed, value]) =>
+                [parsed.name, transform(value, parsed.name)]));
+    const toObject = (key, transform = x => x) =>
+        toMap(key, transform).toObject();
+    const get = (key, missing) => definitions.get(key, missing);
 
-        return { on: fixedOn, name, fromSelf, from: fixedFrom, update };
+    return { toMap, toObject, get };
+}
+
+function toCauseUpdate(eventsIn, definitions)
+{console.log(definitions);
+    const stateless =
+        toEventDescriptions(eventsIn, ANY_STATE, definitions);
+    const stateful = definitions.toMap("state", (value, name) =>
+        toEventDescriptions(eventsIn, name, getDefinitions(value)))
+        .valueSeq().flatten();
+    const handlers = stateful.concat(stateless);
+    const hasStatefulUpdates = stateful.size > 0;
+
+    return function update(state, event, source)
+    {
+        const etype = type(event);
+        const match = handlers.find(({ on, from, fromSelf, inState }) =>
+            (on === false || on.id === etype.id) &&
+            (!fromSelf || state === source) &&
+            (!from || from === source) &&
+            (inState === ANY_STATE || state.state === inState));
+
+        if (!match)
+        {
+            const rname = type(state).name;
+            const ename = etype.name;
+            const inStateMessage = hasStatefulUpdates?
+                "" : ` in state ${state.state}`;
+
+            throw Error(
+                `${rname} does not respond to ${ename}${inStateMessage}`);
+        }
+
+        const result = match.update(state, event, source);
+
+        return Array.isArray(result) ? result : [result, []];
     }
 }
 
-function toCauseUpdate(handlers)
+function toEventDescriptions(eventsIn, inState, definitions)
 {
-    return function update(state, event, source)
-    {//console.log("here?");
-        const etype = type(event);
-        const match = handlers.find(({ on, from, fromSelf }) =>
-            (on === false || on.id === etype.id) &&
-            (!fromSelf || state === source) &&
-            (!from || state.getIn(from) === source));
-//console.log(match, state, event);
-        if (!match)
-            throw Error(
-                `${type(state).name} does not respond to ${etype.name}`);
-//console.log(match.update + "" + type(state).name, match)
-        const result = match.update(state, event, source);
-//console.log(result);
-        return Array.isArray(result) ? result : [result, []];
-    }
+    return definitions
+        .get("event.on", List())
+        .map(function ([{ on, from, name }, update])
+        {
+            const fixedOn = !!on && on !== "*" &&
+                (typeof on === "string" ?
+                    { name: eventsIn[on].name, id: eventsIn[on].id } :
+                    on);
+            const fromSelf = from && from.fromSelf;
+            const fixedFrom = !fromSelf && from;
+
+            return { on: fixedOn, name, fromSelf, from: fixedFrom, update, inState };
+        });
 }
 
 function declaration(previous, key, routes = { })
@@ -103,7 +129,7 @@ function declaration(previous, key, routes = { })
     const rest = typeof previous === "string" ?
         { kind: previous } : previous;
     const toObject = value =>
-        ({ ...rest, [key]: value instanceof Function ? 
+        ({ ...rest, [key]: value instanceof Function ?
             { id: value.id, name: value.name } :
             fromMaybeTemplate(value) });
     const f = value => Object.keys(routes)
@@ -117,8 +143,8 @@ function declaration(previous, key, routes = { })
 function NamedRecord(fields, name)
 {
     const constructor = Record(fields, name);
-    
+
     Object.defineProperty(constructor, "name", { value: name });
-    
+
     return constructor;
 }

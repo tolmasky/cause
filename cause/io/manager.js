@@ -13,6 +13,8 @@ const Manager = Cause("Cause.IO.Manager",
     [field `registeredIOs`]: Map(),
     [field `deferredPush`]: () => { },
 
+    [event.from `root`]: event.ignore,
+
     [event.on (Cause.Start)]: manager =>
         updateRegisteredIOs
             (update.in(manager, ["root"], Cause.Start(), null)),
@@ -32,7 +34,7 @@ function updateRegisteredIOs([manager])
     const { registeredIOs, deferredPush } = manager;
     const [unregisteredIOs, presentIOs] = getDescendentIOs(manager);
     const purgedIOs = registeredIOs.filter((cancel, UUID) =>
-        presentIOs.has(UUID) || void(cancel && cancel()));
+        !presentIOs.has(UUID) || void(cancel && cancel()));
     const [updatedRoot, updatedIOs, nextUUID] =
         unregisteredIOs.reduce(function ([root, IOs, UUID], entry)
         {

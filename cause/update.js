@@ -5,7 +5,7 @@ const type = state => Object.getPrototypeOf(state).constructor;
 module.exports = Object.assign(update, { in: updateIn, in_: updateIn_ });
 
 function update(state, event, source)
-{
+{console.log("SOURCE IS " + source, type(state).name);
     const update = type(state).update;
 
     if (!update)
@@ -58,7 +58,7 @@ function updateInWithIndex(state, path, index, event, source)
 
     return events.reduce(function ([state, coallesced], event)
     {
-        const [updated, events] = update(state, event, source);
+        const [updated, events] = update(state, event, path[index]);
 
         return [updated, [...coallesced, ...events]];
     }, [updated, []]);
