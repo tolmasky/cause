@@ -1,11 +1,15 @@
 const { Record } = require("immutable");
 const type = state => Object.getPrototypeOf(state).constructor;
+const toPathArray = path =>
+    typeof path === "string" ? [path] :
+    Array.isArray(path) ? path : 
+    Array.from(path);
 
 
 module.exports = Object.assign(update, { in: updateIn, in_: updateIn_ });
 
 function update(state, event, source)
-{console.log("SOURCE IS " + source, type(state).name);
+{console.log("SOURCE IS " + source, type(state).name, event);
     const update = type(state).update;
 
     if (!update)
@@ -14,6 +18,19 @@ function update(state, event, source)
     return update(state, event, source);
 }
 
+function updateInAll(pairs, state)
+{
+    return pairs.reduce(function ([state, coallesced], [path, event])
+    {
+        const pathArray = toPathArray(path);
+        const [updated, events] =
+            updateInWithIndex(state, pathArray, 0, event);
+
+        return [updated, [...coallesced, ...events]];
+    }, [state, []]);
+}
+
+updateIn.all = updateInAll;
 
 function updateIn_(path, events, state, source)
 {

@@ -1,12 +1,14 @@
-const { spawn } = require("child_process");
+const { spawn, fork } = require("child_process");
 const { promisify } = require("util");
 const pstree = promisify(require("ps-tree"));
 const Process = require("./process");
 
 
-module.exports = function fork(push, { path, args })
+module.exports = function fork_(push, { path, args })
 {
-    const process = spawn(path, args, { stdio: [0, 1, 2] });
+    const process = path === "node" ?
+        fork(args[0], args.slice(1)) :
+        spawn(path, args, { stdio: [0, 1, 2] });
     const { pid } = process;
     const success = pid !== void 0;
     const cancel = success && (() => kill(0, pid));
@@ -18,7 +20,7 @@ module.exports = function fork(push, { path, args })
     if (success)
     {
         process.on("exit", exitCode => push(Process.ChildExited({ exitCode })));
-        process.on("message", data => Process.MessageOut({ data }));
+        process.on("message", data => Process.ChildMessage({ data }));
 
         push(Process.ChildStarted({ pid, send: data => process.send(data) }));
     }

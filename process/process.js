@@ -14,7 +14,7 @@ const Process = Cause("Process",
     [field `fromMessageOutDataToEvents`]: () => { },
     
     [field `path`]: -1,
-    [field `args`]: -1,
+    [field `args`]: [],
 
     [event.out `Started`]: { pid: -1 },
 
@@ -23,7 +23,7 @@ const Process = Cause("Process",
 
     [event.in `Message`]: { data: null },
 
-    [event.in `ChildStarted`]: { pid: -1 },
+    [event.in `ChildStarted`]: { pid:-1, send:-1 },
     [event.in `ChildMessage`]: { data: -1 },
     [event.in `ChildExited`]: { pid: -1 },
 
@@ -43,7 +43,7 @@ const Process = Cause("Process",
         {console.log(process.killOnStart);
             const updated = process
                 .set("state", "running")
-                .set("send", send)
+                .set("send", (...args) => (console.log("SENDING", args),send(...args)))
                 .set("pid", pid);
             const started = Process.Started({ pid });
 
@@ -63,7 +63,7 @@ const Process = Cause("Process",
             .set("kill", IO.start(push => fork.kill(push, process.pid))) },
 
         [event.on `Message`]: (process, { data }) =>
-            (process.child.send(data), process),
+            (process.send(data), process),
     },
 
     [state `killing`]:
@@ -83,9 +83,15 @@ function onChildMessage(state, { data })
 }
 
 function onChildExited(state, { exitCode })
-{
+{console.log("ON CHILD EXITED", exitCode);
     return [state.set("state", "finished"), Process.Finished({ exitCode })];
 }
+
+Process.isRunning = process =>
+    process.state === "running";
+
+Process.node = ({ path, args = [] }) =>
+    Process.create({ path: "node", args: [path, ...args] });
 
 module.exports = Process;
 

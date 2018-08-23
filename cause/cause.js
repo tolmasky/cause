@@ -72,7 +72,7 @@ function getDefinitions(declarations)
 }
 
 function toCauseUpdate(eventsIn, definitions)
-{console.log(definitions);
+{
     const stateless =
         toEventDescriptions(eventsIn, ANY_STATE, definitions);
     const stateful = definitions.toMap("state", (value, name) =>
