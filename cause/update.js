@@ -21,7 +21,7 @@ function update(inState, inEvent)
 
 function updateFromKeyPath(inState, inEvent, fromKeyPath)
 {
-console.log("UPDATING " + type(inState).name + " with " + type(inEvent).name);
+//console.log("UPDATING " + type(inState).name + " with " + type(inEvent).name);
     return type(inState).update(inState, inEvent, fromKeyPath);
 }
 
@@ -31,7 +31,7 @@ function updateReduce(inState, inEvents)
 }
 
 function updateIn(inState, keyPath, inChildEvent)
-{console.log("UPDATING " + type(inState).name + " with " + KeyPath.from(keyPath) + " and " + inChildEvent);
+{//console.log("UPDATING " + type(inState).name + " with " + KeyPath.from(keyPath) + " and " + inChildEvent);
     return updateInKeyPath(inState, KeyPath.from(keyPath), inChildEvent);
 }
 

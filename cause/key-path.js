@@ -24,5 +24,5 @@ KeyPath.equal = function keyPathsEqual(lhs, rhs)
     return  lhs === rhs ||
             !!lhs === !!rhs &&
             !!lhs && lhs.data === rhs.data &&
-            equals(lhs.next, rhs.next);
+            keyPathsEqual(lhs.next, rhs.next);
 }

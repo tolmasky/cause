@@ -24,6 +24,6 @@ module.exports.serialize = function serialize(record)
 }
 
 module.exports.deserialize = function deserialize(data)
-{console.log(data);
+{
     return constructors[data.id](fromJS(data.serialized));
 }
