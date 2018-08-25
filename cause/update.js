@@ -21,7 +21,7 @@ function update(inState, inEvent)
 
 function updateFromKeyPath(inState, inEvent, fromKeyPath)
 {
-//console.log("UPDATING " + type(inState).name + " with " + type(inEvent).name);
+//console.log("UPDATING " + type(inState).name + " with " + type(inEvent).name + " " + fromKeyPath);
     return type(inState).update(inState, inEvent, fromKeyPath);
 }
 

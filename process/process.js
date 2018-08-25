@@ -29,7 +29,7 @@ const Process = Cause("Process",
     [state `initial`]:
     {
         [event.on (Cause.Start)]: process => process
-            .set("child", IO.start(push => fork(push, process)))
+            .set("child", IO.start(push => spawn(push, process)))
             .set("state", "starting")
     },
 
@@ -59,7 +59,7 @@ const Process = Cause("Process",
 
         [event.on `Kill`]: process => { console.log("here..."); return process
             .set("state", "killing")
-            .set("kill", IO.start(push => fork.kill(push, process.pid))) },
+            .set("kill", IO.start(push => spawn.kill(push, process.pid))) },
 
         [event.on `Message`]: (process, { event }) =>
             (process.send(event), process),
@@ -94,4 +94,4 @@ Process.node = ({ path, args = [] }) =>
 
 module.exports = Process;
 
-const fork = require("./fork");
+const spawn = require("./spawn");
