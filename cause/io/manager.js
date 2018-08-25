@@ -15,14 +15,12 @@ const Manager = Cause("Cause.IO.Manager",
 
     [event.from `root`]: event.ignore,
 
-    [event.on (Cause.Start)]: manager =>
-        updateRegisteredIOs
-            (update.in(manager, ["root"], Cause.Start(), null)),
-
+    [event.on (Cause.Start)]: manager => { console.log("here...");
+        return updateRegisteredIOs(update.in(manager, "root", Cause.Start()));
+},
     [event.in `Route`]: { keyPath:-1, event:-1 },
     [event.on `Route`]: (manager, { keyPath, event }) =>
-        updateRegisteredIOs
-            (update.in(manager, keyPath, IO.Emit({ event })))
+        updateRegisteredIOs(update.in(manager, keyPath, IO.Emit({ event })))
 });
 
 module.exports = Manager;
@@ -30,7 +28,7 @@ module.exports = Manager;
 const Route = Manager.Route;
 
 function updateRegisteredIOs([manager])
-{
+{console.log("UPDATING REGISTERED IOS");
     const { registeredIOs, deferredPush } = manager;
     const [unregisteredIOs, presentIOs] = getDescendentIOs(manager);
     const purgedIOs = registeredIOs.filter((cancel, UUID) =>
@@ -42,8 +40,7 @@ function updateRegisteredIOs([manager])
             const push = event =>
                 deferredPush(Manager.Route({ keyPath, event }));
             const event = IO.Register({ UUID });
-            const [updatedRoot] =
-                update.in(root, keyPath.next, event, null);
+            const [updatedRoot] = update.in(root, keyPath.next, event);
             const updatedIOs = IOs.set(UUID, start(push));
 
             return [updatedRoot, updatedIOs, UUID + 1];

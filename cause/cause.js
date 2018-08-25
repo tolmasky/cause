@@ -1,7 +1,9 @@
 const { Record, List, Map } = require("immutable");
+const KeyPath = require("./key-path");
+
 const fromMaybeTemplate = input =>
     Array.isArray(input) ? input[0] : input;
-//    typeof input === "string" ? input : input[0];
+const isString = object => typeof object === "string";
 const type = record => Object.getPrototypeOf(record).constructor;
 const ANY_STATE = { };
 
@@ -22,7 +24,6 @@ module.exports = Object.assign(Cause,
     {
         ignore: (state, event) => [state, []],
         bubble: (state, event) => [state, [event]],
-        self: { fromSelf: true },
         in: declaration("event.in", "name"),
         out: declaration("event.out", "name"),
         on: declaration("event.on", "on", { from:-1 }),
@@ -81,13 +82,12 @@ function toCauseUpdate(eventsIn, definitions)
     const handlers = stateful.concat(stateless);
     const hasStatefulUpdates = stateful.size > 0;
 
-    return function update(state, event, source)
+    return function update(state, event, keyPath)
     {
         const etype = type(event);
-        const match = handlers.find(({ on, from, fromSelf, inState }) =>
+        const match = handlers.find(({ on, from, inState }) =>
             (on === false || on.id === etype.id) &&
-            (!fromSelf || state === source) &&
-            (!from || from === source) &&
+            (!from || KeyPath.equal(keyPath, from)) &&
             (inState === ANY_STATE || state.state === inState));
 
         if (!match)
@@ -101,7 +101,7 @@ function toCauseUpdate(eventsIn, definitions)
                 `${rname} does not respond to ${ename}${inStateMessage}`);
         }
 
-        const result = match.update(state, event, source);
+        const result = match.update(state, event);
 
         return Array.isArray(result) ? result : [result, []];
     }
@@ -111,22 +111,18 @@ function toEventDescriptions(eventsIn, inState, definitions)
 {
     return definitions
         .get("event.on", List())
-        .map(function ([{ on, from, name }, update])
-        {
-            const fixedOn = !!on && on !== "*" &&
-                (typeof on === "string" ?
-                    { name: eventsIn[on].name, id: eventsIn[on].id } :
-                    on);
-            const fromSelf = from && from.fromSelf;
-            const fixedFrom = !fromSelf && from;
-
-            return { on: fixedOn, name, fromSelf, from: fixedFrom, update, inState };
-        });
+        .map(([{ on, from, name }, update]) =>
+        ({
+            name, update, inState,
+            on: (!!on && on !== "*") &&
+                (isString(on) ? eventsIn[on] : on),
+            from: !!from && KeyPath.from(from)
+        }));
 }
 
 function declaration(previous, key, routes = { })
 {
-    const rest = typeof previous === "string" ?
+    const rest = isString(previous) ?
         { kind: previous } : previous;
     const toObject = value =>
         ({ ...rest, [key]: value instanceof Function ?
@@ -137,7 +133,7 @@ function declaration(previous, key, routes = { })
             { [key]: declaration(toObject(value), key, routes[key]) }),
             { toString: () => JSON.stringify(toObject(value)) });
 
-    return Object.assign(f, f("*"));
+    return Object.assign(f, f(false));
 }
 
 function NamedRecord(fields, name)

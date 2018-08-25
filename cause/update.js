@@ -1,116 +1,88 @@
-const { Record } = require("immutable");
-const type = state => Object.getPrototypeOf(state).constructor;
-const toPathArray = path =>
-    typeof path === "string" ? [path] :
-    Array.isArray(path) ? path : 
-    Array.from(path);
+const { assign } = Object;
+const { isArray } = Array;
+const { Iterable: { isIndexed } } = require("immutable");
+const KeyPath = require("./key-path");
+const type = record => Object.getPrototypeOf(record).constructor;
 
 
-module.exports = Object.assign(update, { in: updateIn, in_: updateIn_ });
+module.exports = assign(update,
+{
+    reduce: updateReduce,
+    in: assign(updateIn, { reduce: updateInReduce })
+});
 
-function update(state, event, source)
-{console.log("SOURCE IS " + source, type(state).name, event);
-    const update = type(state).update;
-
-    if (!update)
-        return [state, [event]];
-
-    return update(state, event, source);
+function update(inState, inEvent)
+{
+    if (inEvent === false)
+        return [inState, []];
+console.log("FOR " + inState + " " + inEvent);
+    return updateFromKeyPath(inState, inEvent);
 }
 
-function updateInAll(pairs, state)
+function updateFromKeyPath(inState, inEvent, fromKeyPath)
 {
-    return pairs.reduce(function ([state, coallesced], [path, event])
+console.log("UPDATING " + type(inState).name + " with " + type(inEvent).name);
+    return type(inState).update(inState, inEvent, fromKeyPath);
+}
+
+function updateReduce(inState, inEvents)
+{
+    return reduce(update, inState, inEvents);
+}
+
+function updateIn(inState, keyPath, inChildEvent)
+{console.log("UPDATING " + type(inState).name + " with " + KeyPath.from(keyPath) + " and " + inChildEvent);
+    return updateInKeyPath(inState, KeyPath.from(keyPath), inChildEvent);
+}
+
+function updateInReduce(inState, keyPathOrPairs, inEventsOrUndefined)
+{
+    const isPairs = inEventsOrUndefined === void(0);
+    const pairs = isPairs ?
+        keyPathOrPairs :
+        inEventsOrUndefined.map(inEvent => [keyPathOrPairs, inEvent]);
+
+    return reduce(updatePair, inState, pairs);
+}
+
+function updatePair(inState, [keyPath, inEvent])
+{
+    return updateIn(inState, keyPath, inEvent)
+}
+
+function updateInKeyPath(inState, keyPath, inChildEvent)
+{
+    if (!keyPath)
+        return update(inState, inChildEvent);
+
+    const key = keyPath.data;
+    const inChild = inState.get(key);
+    const [outChild, midEvents, fromChildKeyPath] =
+        updateInKeyPath(inChild, keyPath.next, inChildEvent);
+    const midState = inState.set(key, outChild);
+    const fromKeyPath = KeyPath(key, fromChildKeyPath);
+
+    return isCause(midState) ?
+        reduce(updateFromKeyPath, midState, midEvents, fromKeyPath) :
+        [midState, midEvents, fromKeyPath];
+}
+
+function isCause(state)
+{
+    return  state && typeof state === "object" &&
+            typeof type(state).update === "function";
+}
+
+function reduce(update, inState, items, fromKeyPath)
+{
+    return items.reduce(function ([inState, midEvents], item)
     {
-        const pathArray = toPathArray(path);
-        const [updated, events] =
-            updateInWithIndex(state, pathArray, 0, event);
+        const [outState, outEvents] =
+            update(inState, item, fromKeyPath);
+        const concatedEvents = midEvents && outEvents ?
+            [...midEvents, ...outEvents] :
+            midEvents || outEvents;
 
-        return [updated, [...coallesced, ...events]];
-    }, [state, []]);
+        return [outState, concatedEvents];
+    }, [inState, []]);
 }
-
-updateIn.all = updateInAll;
-
-function updateIn_(path, events, state, source)
-{
-    return [].concat(events).reduce(function ([state, coallesced], event)
-    {
-        if (!event)
-            return [state, coallesced];
-
-        const [updated, events] =
-            updateInWithIndex(state, path, 0, event, source);
-
-        return [updated, [...coallesced, ...events]];
-    }, [state, []]);
-}
-
-function updateIn(state, path, event, source)
-{
-    const pathArray = typeof path === "string" ? [path] : Array.from(path);
-
-    if (Array.isArray(event))
-        return event.reduce(function ([state, coallesced], event)
-        {
-            const [updated, events] =
-                updateInWithIndex(state, pathArray, 0, event, source);
-
-            return [updated, [...coallesced, ...events]];
-        }, [state, []]);
-
-    return updateInWithIndex(state, pathArray, 0, event, source);
-}
-
-function updateInWithIndex(state, path, index, event, source)
-{
-    if (index >= path.length)
-        return update(state, event, source);
-
-    const component = path[index];
-    const child = state.get(component);
-    const [updatedChild, events] =
-        updateInWithIndex(child, path, index + 1, event, source);
-    const updated = state.set(component, updatedChild);
-
-    return events.reduce(function ([state, coallesced], event)
-    {
-        const [updated, events] = update(state, event, path[index]);
-
-        return [updated, [...coallesced, ...events]];
-    }, [updated, []]);
-}
-
-/*
-
-const isNonStringIterable = object =>
-    object &&
-    typeof object !== "string" &&
-    typeof object[Symbol.iterator] === "function";
-const ofString = iterable =>
-    (seq => seq.has(0) && typeof seq.get(0) === "string")
-    (Seq(iterable));
-
-update.in.all
-update.start.all
-
-function updateAll(paths, events, state, source)
-{
-
-}
-
-function updateStart(path, state, source)
-{
-    const start = Cause.Start();
-
-    return [].concat(events).reduce(
-        function ([state, coallesced], [path, event])
-        {
-            const [updated, events] =
-                updateInWithIndex(state, path, 0, start, source);
-
-            return [updated, [...coallesced, ...events]];
-        });
-}
-
-*/

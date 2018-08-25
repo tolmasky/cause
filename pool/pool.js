@@ -1,6 +1,5 @@
 const { Record, Iterable, List, Range, Set } = require("immutable");
 const { Cause, event, field } = require("cause");
-const Allotment = Record({ request:-1, index:-1 }, "Allotment");
 
 
 const Pool = Cause ("Pool",
@@ -9,55 +8,47 @@ const Pool = Cause ("Pool",
     [field `free`]: List(),
     [field `occupied`]: Set(),
 
-    init: ({ count }) =>
-        ({ free: Range(0, count).toList() }),
+    init: ({ count }) => ({ free: Range(0, count).toList() }),
+
+    // Whenever resources either get retained or released, an Alloted event
+    // will be returned.
+    [event.out `Retained`]: { index:-1, request:-1 },
 
     // Users `enqueue` requests for resources, and we fire an event when
     // said resources are `allotted`.
     [event.in `Enqueue`]: { requests: List() },
-    [event.out `Allotted`]: { allotments: List() },
-
     // Simply note the requests, then see what can be satisfied.
-    [event.on `Enqueue`]: (pool, { requests }) =>
-        allot(pool.set("backlog", pool.backlog.concat(requests))),
+    [event.on `Enqueue`]: (inPool, { requests }) =>
+        allot(inPool.set("backlog", inPool.backlog.concat(requests))),
 
     // Users `release` resources, and in turn we fire events for the 
     // releases as well as the newly allowed allotments.
     [event.in `Release`]: { indexes: Set() },
-    [event.out `Released`]: { indexes: Set() },
-
     // Free up the resources, then see if we can allot any of them.
-    [event.on `Release`](pool, { indexes })
-    {
-        const { free, backlog, occupied } = pool;
-        const released = pool
-            .set("free", free.concat(indexes))
-            .set("occupied", occupied.subtract(indexes));
-        const [allotted, events] = allot(released);
-//console.log("RELEASED!", allotted);
-        return [allotted, [Pool.Released({ indexes }), ...events]];
-    }
+    [event.on `Release`]: (inPool, { indexes }) =>
+        allot(inPool
+            .set("free", inPool.free.concat(indexes))
+            .set("occupied", inPool.occupied.subtract(indexes)))
 });
 
 module.exports = Pool;
 
-function allot(pool)
+function allot(inPool)
 {
-    const { backlog, free, occupied } = pool;
+    const { backlog, free, occupied } = inPool;
 
     if (backlog.size <= 0 || free.size <= 0)
-        return [pool, []];
+        return inPool;
 
     const dequeued = backlog.take(free.size);
     const indexes = free.take(dequeued.size);
-    const updated = pool
+    const outPool = inPool
         .set("backlog", backlog.skip(dequeued.size))
         .set("free", free.skip(dequeued.size))
         .set("occupied", occupied.concat(indexes));
-
-    const allotments = dequeued.zipWith((request, index) =>
-        Allotment({ request, index }),
+    const retains = dequeued.zipWith(
+        (request, index) => Pool.Assigned({ request, index }),
         indexes);
 
-    return [updated, [Pool.Allotted({ allotments })]];
+    return [outPool, retains];
 }
