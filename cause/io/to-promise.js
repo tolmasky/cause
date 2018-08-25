@@ -11,12 +11,13 @@ module.exports = function toPromise(root)
         const deferredPush = event => setImmediate(function ()
         {
             const [updated, events] = update(mutableManager, event);
+            console.log("-->" + events);
             const finished = events.reduce((finished, event) =>
                 finished ||
                     void(channel.emit(event)) ||
-                    event instanceof Manager.Finished && event,
+                    event instanceof Cause.Finished && event,
                 null);
-
+if (finished) { console.log("FINISH") }
             // THE ONLY MUTATION!
             mutableManager = updated;
 

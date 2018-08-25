@@ -13,7 +13,7 @@ const Manager = Cause("Cause.IO.Manager",
     [field `registeredIOs`]: Map(),
     [field `deferredPush`]: () => { },
 
-    [event.from `root`]: event.ignore,
+    [event.from `root`]: (manager, event) => [manager, [event]],
 
     [event.on (Cause.Start)]: manager =>
         updateRegisteredIOs(update.in(manager, "root", Cause.Start())),
@@ -27,7 +27,7 @@ module.exports = Manager;
 
 const Route = Manager.Route;
 
-function updateRegisteredIOs([manager])
+function updateRegisteredIOs([manager, events])
 {
     const { registeredIOs, deferredPush } = manager;
     const [unregisteredIOs, presentIOs] = getDescendentIOs(manager);
@@ -45,11 +45,12 @@ function updateRegisteredIOs([manager])
 
             return [updatedRoot, updatedIOs, UUID + 1];
         }, [manager.root, purgedIOs, manager.nextUUID]);
-
-    return manager
+    const updated = manager
         .set("root", updatedRoot)
         .set("nextUUID", nextUUID)
         .set("registeredIOs", updatedIOs);
+
+    return [updated, events];
 }
 
 function getDescendentIOs(node)
