@@ -5,7 +5,7 @@ const IO = require("../io");
 const LNode = require("../lnode");
 const NoDescendentIOs = [List(), Set()];
 
-
+Error.stackTraceLimit = 1000;
 const Manager = Cause("Cause.IO.Manager",
 {
     [field `root`]: -1,
@@ -15,9 +15,9 @@ const Manager = Cause("Cause.IO.Manager",
 
     [event.from `root`]: event.ignore,
 
-    [event.on (Cause.Start)]: manager => { console.log("here...");
-        return updateRegisteredIOs(update.in(manager, "root", Cause.Start()));
-},
+    [event.on (Cause.Start)]: manager =>
+        updateRegisteredIOs(update.in(manager, "root", Cause.Start())),
+
     [event.in `Route`]: { keyPath:-1, event:-1 },
     [event.on `Route`]: (manager, { keyPath, event }) =>
         updateRegisteredIOs(update.in(manager, keyPath, IO.Emit({ event })))
@@ -28,7 +28,7 @@ module.exports = Manager;
 const Route = Manager.Route;
 
 function updateRegisteredIOs([manager])
-{console.log("UPDATING REGISTERED IOS");
+{
     const { registeredIOs, deferredPush } = manager;
     const [unregisteredIOs, presentIOs] = getDescendentIOs(manager);
     const purgedIOs = registeredIOs.filter((cancel, UUID) =>

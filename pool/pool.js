@@ -47,7 +47,7 @@ function allot(inPool)
         .set("free", free.skip(dequeued.size))
         .set("occupied", occupied.concat(indexes));
     const retains = dequeued.zipWith(
-        (request, index) => Pool.Assigned({ request, index }),
+        (request, index) => Pool.Retained({ request, index }),
         indexes);
 
     return [outPool, retains];

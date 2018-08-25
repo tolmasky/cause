@@ -11,7 +11,6 @@ const Process = Cause("Process",
     [field `kill`]: null,
 
     [field `state`]: "initial",
-    [field `fromMessageOutDataToEvents`]: () => { },
     
     [field `path`]: -1,
     [field `args`]: [],
@@ -21,10 +20,10 @@ const Process = Cause("Process",
     [event.in `Kill`]: { },
     [event.out `Finished`]: { exitCode: -1 },
 
-    [event.in `Message`]: { data: null },
+    [event.in `Message`]: { event: null },
 
     [event.in `ChildStarted`]: { pid:-1, send:-1 },
-    [event.in `ChildMessage`]: { data: -1 },
+    [event.in `ChildMessage`]: { event: -1 },
     [event.in `ChildExited`]: { pid: -1 },
 
     [state `initial`]:
@@ -62,8 +61,8 @@ const Process = Cause("Process",
             .set("state", "killing")
             .set("kill", IO.start(push => fork.kill(push, process.pid))) },
 
-        [event.on `Message`]: (process, { data }) =>
-            (process.send(data), process),
+        [event.on `Message`]: (process, { event }) =>
+            (process.send(event), process),
     },
 
     [state `killing`]:
@@ -77,9 +76,9 @@ const Process = Cause("Process",
     [state `finished`]: { }
 });
 
-function onChildMessage(state, { data })
-{
-    return [process, fromMessageOutDataToEvents(data) || []];
+function onChildMessage(state, { event })
+{console.log("ON CHILD MESSAGE", event);
+    return [state, [event]];
 }
 
 function onChildExited(state, { exitCode })

@@ -1,27 +1,29 @@
 const { Cause, event, field, IO } = require("cause");
+const { serialize, deserialize } = require("cause/record");
+
 
 const Parent = Cause("Process.Parent",
 {
     [field `process`]: IO.start(start),
-    [field `fromMessageToEvent`]: () => { },
 
     [event.in `Ready`]: { },
     [event.on `Ready`]: (parent, event) =>
         [parent, [event]],
 
-    [event.in `Message`]: { data: -1 },
-    [event.on `Message`]: (parent, { data }) =>
-        (process.send(data), parent),
+    [event.in `Message`]: { event: -1 },
+    [event.on `Message`]: (parent, { event }) =>
+        (process.send({ serialized: serialize(event) }), parent),
 
-    [event.in `ParentMessage`]: { data: -1 },
-    [event.on `ParentMessage`]: (parent, message) =>
-        [parent, [].concat(parent.fromMessageToEvent(message))]
+    [event.in `ParentMessage`]: { event: -1 },
+    [event.on `ParentMessage`]: (parent, { event }) =>
+        [parent, [event]]
 });
 
 module.exports = Parent;
 
 function start(push)
 {
-    process.on("message", data => { console.log("CHEESE!"); push(Parent.ParentMessage({ data })) });
+    process.on("message", ({ serialized }) =>
+        push(Parent.ParentMessage({ event: deserialize(serialized) })));
     push(Parent.Ready());
 }

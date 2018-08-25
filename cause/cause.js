@@ -1,18 +1,14 @@
-const { Record, List, Map } = require("immutable");
+const { List, Map } = require("immutable");
+const Record = require("./record");
 const KeyPath = require("./key-path");
 
+const Event = typename => (fields, name) => Record(fields, `${typename}.${name}`);
 const fromMaybeTemplate = input =>
     Array.isArray(input) ? input[0] : input;
 const isString = object => typeof object === "string";
 const type = record => Object.getPrototypeOf(record).constructor;
 const ANY_STATE = { };
 
-const Event = Object.assign(
-    typename => (fields, name) =>
-        Event.map[Event.count] = Object.assign(
-            NamedRecord(fields, `${typename}.${name}`),
-            { id: Event.count++ }),
-    { count: 0, map: [] });
 
 Cause.Start = Event("Cause")({ }, "Start");
 
@@ -49,7 +45,7 @@ function Cause(nameOrArray, declarations)
     const fields = definitions.toObject("field");
     const eventsIn = definitions.toObject("event.in", Event(typename));
     const eventsOut = definitions.toObject("event.out", Event(typename));
-    const type = NamedRecord(fields, typename);
+    const type = Record(fields, typename);
     const update = toCauseUpdate(eventsIn, definitions);
 
     return Object.assign(type, { create, update }, eventsIn, eventsOut);
@@ -101,7 +97,7 @@ function toCauseUpdate(eventsIn, definitions)
                 `${rname} does not respond to ${ename}${inStateMessage}`);
         }
 
-        const result = match.update(state, event);
+        const result = match.update(state, event, keyPath);
 
         return Array.isArray(result) ? result : [result, []];
     }
@@ -134,13 +130,4 @@ function declaration(previous, key, routes = { })
             { toString: () => JSON.stringify(toObject(value)) });
 
     return Object.assign(f, f(false));
-}
-
-function NamedRecord(fields, name)
-{
-    const constructor = Record(fields, name);
-
-    Object.defineProperty(constructor, "name", { value: name });
-
-    return constructor;
 }

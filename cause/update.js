@@ -15,7 +15,7 @@ function update(inState, inEvent)
 {
     if (inEvent === false)
         return [inState, []];
-console.log("FOR " + inState + " " + inEvent);
+//console.log("FOR " + inState + " " + inEvent);
     return updateFromKeyPath(inState, inEvent);
 }
 
