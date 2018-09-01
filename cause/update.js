@@ -16,18 +16,7 @@ function update(inState, inEvent)
     if (inEvent === false)
         return [inState, []];
 //console.log("FOR " + inState + " " + inEvent);
-    return updateFromKeyPath(inState, inEvent);
-}
-
-function updateFromKeyPath(inState, inEvent, fromKeyPath)
-{
-const c = type(inState).update(inState, inEvent, fromKeyPath);
-if (c.length === 3) {
-console.log(c);
-console.log(Error().stack);
-//    process.exit(0);
-}
-return c;
+    return type(inState).update(inState, inEvent);
 }
 
 function updateReduce(inState, inEvents)
@@ -57,21 +46,20 @@ function updatePair(inState, [keyPath, inEvent])
 
 function updateInKeyPath(inState, keyPath, inChildEvent)
 {
-    if (!keyPath){
-        const x= update(inState, inChildEvent);
-        console.log(x);
-    return x;
-}
+    if (!keyPath)
+        return update(inState, inChildEvent);
+
     const key = keyPath.data;
     const inChild = inState.get(key);
-    const [outChild, midEvents, fromChildKeyPath] =
+    const [outChild, midEvents] =
         updateInKeyPath(inChild, keyPath.next, inChildEvent);
     const midState = inState.set(key, outChild);
-    const fromKeyPath = KeyPath(key, fromChildKeyPath);
+    const keyedEvents = midEvents.map(event =>
+        event.update("fromKeyPath", keyPath => KeyPath(key, keyPath)));
 
     return isCause(midState) ?
-        reduce(updateFromKeyPath, midState, midEvents, fromKeyPath) :
-        [midState, midEvents, fromKeyPath];
+        reduce(update, midState, keyedEvents) :
+        [midState, keyedEvents];
 }
 
 function isCause(state)
@@ -80,12 +68,11 @@ function isCause(state)
             typeof type(state).update === "function";
 }
 
-function reduce(update, inState, items, fromKeyPath)
+function reduce(update, inState, items)
 {
     return items.reduce(function ([inState, midEvents], item)
     {
-        const [outState, outEvents] =
-            update(inState, item, fromKeyPath);
+        const [outState, outEvents] = update(inState, item);
         const concatedEvents = midEvents && outEvents ?
             [...midEvents, ...outEvents] :
             midEvents || outEvents;

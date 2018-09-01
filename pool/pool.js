@@ -38,11 +38,11 @@ const Pool = Cause ("Pool",
         allot(expanded(inPool, event)),
 
     // FIXME: We should do from ["notReady", ANY]
-    [event.on (Cause.Ready)]: (inPool, event, [, key]) =>
+    [event.on (Cause.Ready)]: (inPool, { fromKeyPath: [, key] }) =>
         update(inPool.removeIn(["notReady", key]),
             Pool.Expand({ items:[inPool.notReady.get(key)] })),
 
-    [event.on `*` .from (["items", "*"])]: event.passthrough,
+    [event.on `*` .from (["items", "**"])]: event.passthrough,
 });
 
 module.exports = Pool;

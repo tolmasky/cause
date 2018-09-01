@@ -22,7 +22,8 @@ module.exports = function fork_(push, { path, args })
     {
         process.on("exit", exitCode => push(Process.ChildExited({ exitCode })));
         process.on("message", ({ serialized }) =>
-            push(Process.ChildMessage({ event: deserialize(serialized) })));
+            push(Process.ChildMessage({ event: deserialize(serialized)
+                .set("fromKeyPath", undefined) })));
 
         const send = event => process.send({ serialized: serialize(event) });
         push(Process.ChildStarted({ pid, send }));

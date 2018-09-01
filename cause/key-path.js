@@ -1,5 +1,6 @@
 const LNode = require("./lnode");
-const isAny = ({ data }) => data === "*";
+const isAny = keyPath => keyPath && keyPath.data === "*";
+const isRestAny = keyPath => keyPath && keyPath.data === "**";
 
 
 function KeyPath(key, next)
@@ -22,8 +23,18 @@ KeyPath.from = function keyPathFrom(keyPath)
 
 KeyPath.equal = function keyPathsEqual(lhs, rhs)
 {
-    return  lhs === rhs ||
-            !!lhs === !!rhs &&
-            !!lhs && (lhs.data === rhs.data || isAny(lhs) || isAny(rhs)) &&
-            keyPathsEqual(lhs.next, rhs.next);
+    if (lhs === rhs)
+        return true;
+
+    if (!lhs && !rhs)
+        return true;
+
+    if (isRestAny(lhs) || isRestAny(rhs))
+        return true;
+
+    if (!isAny(lhs) && !isAny(rhs) &&
+        (!lhs !== !rhs || lhs.data !== rhs.data))
+        return false;
+
+    return keyPathsEqual(lhs.next, rhs.next);
 }

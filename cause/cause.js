@@ -2,7 +2,9 @@ const { List, Map } = require("immutable");
 const Record = require("./record");
 const KeyPath = require("./key-path");
 
-const Event = typename => (fields, name) => Record(fields, `${typename}.${name}`);
+const Event = typename => (fields, name) =>
+    Record({ ...fields, fromKeyPath: void 0 },
+        `${typename}.${name}`);
 const fromMaybeTemplate = input =>
     Array.isArray(input) ? input.length > 1 ? input : input[0] : input;
 const isString = object => typeof object === "string";
@@ -28,8 +30,7 @@ module.exports = Object.assign(Cause,
     {
         ignore: (state, event) => [state, []],
         bubble: (state, event) => [state, [event]],
-        passthrough: (state, event, fromKeyPath) =>
-            [state, [event], fromKeyPath],
+        passthrough: (state, event) => [state, [event]],
         in: declaration("event.in", "name"),
         out: declaration("event.out", "name"),
         on: declaration("event.on", "on", { from:-1 }),
@@ -90,12 +91,13 @@ function toCauseUpdate(eventsIn, definitions)
     const handlers = stateful.concat(stateless);
     const hasStatefulUpdates = stateful.size > 0;
 
-    return function update(state, event, keyPath)
+    return function update(state, event)
     {
         const etype = type(event);
+        const { fromKeyPath } = event;
         const match = handlers.find(({ on, from, inState }) =>
             (on === false || on.id === etype.id) &&
-            (!from || KeyPath.equal(keyPath, from)) &&
+            (!from || KeyPath.equal(fromKeyPath, from)) &&
             (inState === ANY_STATE || state.state === inState));
 
         if (!match)
@@ -104,14 +106,14 @@ function toCauseUpdate(eventsIn, definitions)
             const ename = etype.name;
             const inStateMessage = hasStatefulUpdates ?
                 ` in state ${state.state}` : "";
-            const fromMessage = keyPath ? ` from ${keyPath}` : "";
+            const fromMessage = fromKeyPath ? ` from ${fromKeyPath}` : "";
             const details = `${inStateMessage}${fromMessage}`;
 
             throw Error(
                 `${rname} does not respond to ${ename}${details}`);
         }
 
-        const result = match.update(state, event, keyPath);
+        const result = match.update(state, event);
 
         return Array.isArray(result) ? result : [result, []];
     }

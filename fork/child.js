@@ -7,12 +7,10 @@ const Child = Cause("Fork.Child",
     [field `root`]: -1,
     [field `parent`]: Parent.create(),
 
-    [event.on (Cause.Ready)]: child => {
-    console.log("now: " + Cause.Ready.are([child.parent, child.root]) + " " + child.parent.ready + " " + Cause.Ready.is(child.root));
-    return Cause.Ready.are([child.parent, child.root]) ?
+    [event.on (Cause.Ready)]: child =>
+        Cause.Ready.are([child.parent, child.root]) ?
             update.in(child, "parent", Message({ event: Cause.Ready() })) :
-            child
-        },
+            child,
 
     [event.on (Cause.Start)]: event.ignore,
 
