@@ -11,7 +11,7 @@ const IO = Cause("Cause.IO",
 
     [event.in `Register`]: { UUID: -1 },
     [event.on `Register`]: (io, { UUID }) => io
-        .set("UUID", `unique-${UUID}`)
+        .set("UUID", UUID)
         .set("needsRegistration", false)
 });
 

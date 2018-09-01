@@ -2,8 +2,8 @@ const { List, Map, Record, Range, Set } = require("immutable");
 const { Cause, field, event } = require("../cause");
 const update = require("../update");
 const IO = require("../io");
-const LNode = require("../lnode");
-const NoDescendentIOs = [List(), Set()];
+const KeyPath = require("../key-path");
+const NoDescendentIOs = [List(), Map()];
 
 Error.stackTraceLimit = 1000;
 const Manager = Cause("Cause.IO.Manager",
@@ -18,8 +18,10 @@ const Manager = Cause("Cause.IO.Manager",
     [event.on (Cause.Start)]: manager =>
         updateRegisteredIOs(update.in(manager, "root", Cause.Start())),
 
-    [event.in `Route`]: { keyPath:-1, event:-1 },
-    [event.on `Route`]: (manager, { keyPath, event }) => {
+    [event.in `Route`]: { UUID:-1, event:-1 },
+    [event.on `Route`]: (manager, { UUID, event }) => {
+        const keyPath = getDescendentIOs(manager)[1].get(UUID);
+        //console.log(getDescendentIOs(manager)[1], UUID);
     console.log("ROUTE " + event.__proto__.constructor.name + " " + keyPath);
         const x = updateRegisteredIOs(update.in(manager, keyPath, IO.Emit({ event })))
     //console.log(x+"");
@@ -35,14 +37,15 @@ function updateRegisteredIOs([manager, events])
 {
     const { registeredIOs, deferredPush } = manager;
     const [unregisteredIOs, presentIOs] = getDescendentIOs(manager);
+    console.log(registeredIOs, presentIOs);
     const purgedIOs = registeredIOs.filter((cancel, UUID) =>
-        !presentIOs.has(UUID) || void(cancel && cancel()));
+        presentIOs.has(UUID) || void(cancel && cancel()));
     const [updatedRoot, updatedIOs, nextUUID] =
         unregisteredIOs.reduce(function ([root, IOs, UUID], entry)
         {
             const { start, keyPath } = entry;
             const push = event =>
-                deferredPush(Manager.Route({ keyPath, event }));
+                deferredPush(Manager.Route({ UUID, event }));
             const event = IO.Register({ UUID });
             const [updatedRoot] = update.in(root, keyPath.next, event);
             const updatedIOs = IOs.set(UUID, start(push));
@@ -69,13 +72,15 @@ function getComputedDescendentIOs(node)
 {
     return node instanceof IO ?
         node.needsRegistration ?
-            [List.of(new Entry(node.start)), Set()] : NoDescendentIOs :
+            [List.of(new Entry(node.start)), Map()] :
+            [List(), Map([[node.UUID, undefined]])] :
         node.keySeq().reduce(function (accumulated, key)
         {
             const descendents = getDescendentIOs(node.get(key));
             const unregistered = accumulated[0]
                 .concat(descendents[0].map(entry => entry.push(key)));
-            const registered = accumulated[1].concat(descendents[1]);
+            const registered = accumulated[1]
+                .concat(descendents[1].map(keyPath => KeyPath(key, keyPath)));
 
             return [unregistered, registered];
         }, NoDescendentIOs);
@@ -104,7 +109,7 @@ Entry.prototype.toString = function ()
 
 Entry.prototype.push = function (key)
 {
-    return new Entry(this.start, new LNode(key, this.keyPath));
+    return new Entry(this.start, KeyPath(key, this.keyPath));
 }
 
 /*

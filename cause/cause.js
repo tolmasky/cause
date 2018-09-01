@@ -1,4 +1,4 @@
-const { List, Map } = require("immutable");
+const { List, Map, ...I } = require("immutable");
 const Record = require("./record");
 const KeyPath = require("./key-path");
 
@@ -16,7 +16,7 @@ Cause.Start = Event("Cause")({ }, "Start");
 Cause.Finished = Event("Cause")({ value: 10 }, "Finished");
 Cause.Ready = Event("Cause")({ }, "Ready");
 Cause.Ready.is = cause =>
-    !(cause instanceof Record) ||
+    !(cause instanceof I.Record) ||
     !cause.has("ready") || cause.ready;
 Cause.Ready.are = causes =>
     causes.length <= 0 ||
