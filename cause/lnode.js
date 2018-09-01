@@ -11,7 +11,6 @@ LNode.prototype[Symbol.iterator] = function * ()
     do
         yield node.data;
     while (node = node.next)
-        
 }
 
 LNode.prototype.toString = function ()

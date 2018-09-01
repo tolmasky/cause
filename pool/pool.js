@@ -1,4 +1,4 @@
-const { Record, Iterable, List, Range, Set } = require("immutable");
+const { Record, Iterable, List, Map, Range, Set } = require("immutable");
 const { Cause, event, field } = require("cause");
 
 
@@ -7,8 +7,11 @@ const Pool = Cause ("Pool",
     [field `backlog`]: List(),
     [field `free`]: List(),
     [field `occupied`]: Set(),
+    [field `items`]: List(),
+    [field `notReady`]: Map({ id: 0 }),
 
-    init: ({ count }) => ({ free: Range(0, count).toList() }),
+    init: ({ items, count }) =>
+        expanded(Pool(), { items, count }),
 
     // Whenever resources either get retained or released, an Alloted event
     // will be returned.
@@ -28,10 +31,47 @@ const Pool = Cause ("Pool",
     [event.on `Release`]: (inPool, { indexes }) =>
         allot(inPool
             .set("free", inPool.free.concat(indexes))
-            .set("occupied", inPool.occupied.subtract(indexes)))
+            .set("occupied", inPool.occupied.subtract(indexes))),
+
+    [event.in `Expand`]: { items: void 0, count: -1 },
+    [event.on `Expand`]: (inPool, event) =>
+        allot(expanded(inPool, event)),
+
+    // FIXME: We should do from ["notReady", ANY]
+    [event.in (Cause.Ready)]: (inPool, event, [, key]) =>
+        update(inPool.remoteIn(["notReady", key]),
+            Pool.Expand({ items:[inPool.notReady.get(key)] }))
+});
+
+Pool.OnReady = Cause("Pool.OnReady",
+{
+    [field `item`]: -1
 });
 
 module.exports = Pool;
+
+function expanded(inPool, { items: iterable, count })
+{
+    const size = inPool.free.size;
+    const sequence = iterable ?
+        List(iterable) : Range(size, size + count);
+    const divided = sequence
+        .groupBy(item => item instanceof Pool.OnReady);
+
+    const items = inPool.items
+        .concat(divided.get(false, List()));
+    const free = inPool.free.concat(iterable ?
+        Range(size, size + items.size).toList() :
+        items);
+
+    const id = inPool.notReady.get("id");
+    const notReadyPairs = divided.get(true, List())
+        .map(({ item }, index) => [id + index, item])
+    const notReady = inPool.notReady
+        .concat(Map(notReadyPairs).set("id", notReadyPairs.size));
+
+    return inPool.merge({ items, free, notReady });
+}
 
 function allot(inPool)
 {

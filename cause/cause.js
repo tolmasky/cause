@@ -12,6 +12,7 @@ const ANY_STATE = { };
 
 Cause.Start = Event("Cause")({ }, "Start");
 Cause.Finished = Event("Cause")({ value: 10 }, "Finished");
+Cause.Ready = Event("Cause")({ }, "Ready");
 
 module.exports = Object.assign(Cause,
 {
