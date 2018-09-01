@@ -37,7 +37,6 @@ function updateRegisteredIOs([manager, events])
 {
     const { registeredIOs, deferredPush } = manager;
     const [unregisteredIOs, presentIOs] = getDescendentIOs(manager);
-    console.log(registeredIOs, presentIOs);
     const purgedIOs = registeredIOs.filter((cancel, UUID) =>
         presentIOs.has(UUID) || void(cancel && cancel()));
     const [updatedRoot, updatedIOs, nextUUID] =

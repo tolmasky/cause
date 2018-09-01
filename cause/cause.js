@@ -140,10 +140,18 @@ function declaration(previous, key, routes = { })
         ({ ...rest, [key]: value instanceof Function ?
             { id: value.id, name: value.name } :
             fromMaybeTemplate(value) });
-    const f = value => Object.keys(routes)
+    const f = value => ensure(key, value) && Object.keys(routes)
         .reduce((object, key) => Object.assign(object,
             { [key]: declaration(toObject(value), key, routes[key]) }),
             { toString: () => JSON.stringify(toObject(value)) });
 
     return Object.assign(f, f(false));
+}
+
+function ensure(key, value)
+{
+    if (value === void 0)
+        throw SyntaxError(`Undefined passed to "${key}"`);
+
+    return true;
 }
