@@ -15,7 +15,7 @@ LNode.prototype[Symbol.iterator] = function * ()
 
 LNode.prototype.toString = function ()
 {
-    return `@[ ${Array.from(this, JSON.stringify).join(",") }]`;
+    return `@[${Array.from(this, JSON.stringify).join(", ") }]`;
 }
 
 module.exports = LNode;

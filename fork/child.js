@@ -5,21 +5,22 @@ const { Parent, Message } = require("@cause/process/parent");
 const Child = Cause("Fork.Child",
 {
     [field `root`]: -1,
-    [field `type`]: -1,
     [field `parent`]: Parent.create(),
 
-    [event.out `Ready`]: { },
-    [event.on (Parent.Ready)]: child =>
-        update.in(child, "parent", Message({ event: Child.Ready() })),
+    [event.on (Cause.Ready)]: child => {
+    console.log("now: " + Cause.Ready.are([child.parent, child.root]) + " " + child.parent.ready + " " + Cause.Ready.is(child.root));
+    return Cause.Ready.are([child.parent, child.root]) ?
+            update.in(child, "parent", Message({ event: Cause.Ready() })) :
+            child
+        },
+
+    [event.on (Cause.Start)]: event.ignore,
 
     [event.from `root`]: (child, event) =>
         update.in(child, "parent", Message({ event })),
 
     [event.from `parent`]: (child, event) =>
-        update.in(child, "root", event),
-
-    [event.on (Cause.Start)]: child =>
-        child.set("root", child.type.create())
+        update.in(child, "root", event)
 });
 
 module.exports = Child;

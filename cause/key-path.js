@@ -1,4 +1,5 @@
 const LNode = require("./lnode");
+const isAny = ({ data }) => data === "*";
 
 
 function KeyPath(key, next)
@@ -16,13 +17,13 @@ KeyPath.from = function keyPathFrom(keyPath)
     if (typeof keyPath === "string")
         return new LNode(keyPath);
 
-    return keyPath.reduceRight((next, data) => new LNode(data, next), null);
+    return keyPath.reduceRight((next, data) => new LNode(data, next), undefined);
 }
 
 KeyPath.equal = function keyPathsEqual(lhs, rhs)
 {
     return  lhs === rhs ||
             !!lhs === !!rhs &&
-            !!lhs && lhs.data === rhs.data &&
+            !!lhs && (lhs.data === rhs.data || isAny(lhs) || isAny(rhs)) &&
             keyPathsEqual(lhs.next, rhs.next);
 }

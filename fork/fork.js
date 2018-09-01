@@ -11,21 +11,20 @@ module.exports = function (type)
 
 const Fork = Cause("Fork",
 {
+    [field `ready`]: false,
     [field `state`]: "initial",
     [field `process`]: -1,
     [field `backlog`]: List(),
 
     init: ({ type }) =>
-        ({ process: node({ path: __filename, args:[type.path] }) }),
+    {
+        const process = node({ path: __filename, args:[type.path] });
+
+        return { process: update(process, Cause.Start())[0] };
+    },
 
     [state `initial`]:
     {
-        [event.on (Cause.Start)]: fork =>
-            update.in(
-                fork,
-                "process",
-                Cause.Start()),
-
         [event.on (Process.Started)]: fork =>
             fork.set("state", "running"),
 
@@ -35,11 +34,16 @@ const Fork = Cause("Fork",
     
     [state `running`]:
     {
-        [event.on (Child.Ready)]: fork =>
-            update.in.reduce(
-                fork.set("backlog", -1),
+        [event.on (Cause.Ready) .from `process`](fork)
+        {console.log("got ready...");
+            const [outFork, events] = update.in.reduce(
+                fork.set("ready", true)
+                    .set("backlog", -1),
                 "process",
-                fork.backlog),
+                fork.backlog);
+
+            return [outFork, [...events, Cause.Ready()]];
+        },
 
         [event.from `process`]: (fork, event) => [fork, [event]],
 
@@ -54,5 +58,5 @@ if (require.main === module)
     const type = require(filename);
     const IO = require("cause/io");
 
-    IO.toPromise(Child.create({ type }));
+    IO.toPromise(Child.create({ root: type.create() }));
 }

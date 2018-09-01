@@ -19,8 +19,12 @@ const Manager = Cause("Cause.IO.Manager",
         updateRegisteredIOs(update.in(manager, "root", Cause.Start())),
 
     [event.in `Route`]: { keyPath:-1, event:-1 },
-    [event.on `Route`]: (manager, { keyPath, event }) =>
-        updateRegisteredIOs(update.in(manager, keyPath, IO.Emit({ event })))
+    [event.on `Route`]: (manager, { keyPath, event }) => {
+    console.log("ROUTE " + event.__proto__.constructor.name + " " + keyPath);
+        const x = updateRegisteredIOs(update.in(manager, keyPath, IO.Emit({ event })))
+    //console.log(x+"");
+    return x;    
+    }
 });
 
 module.exports = Manager;

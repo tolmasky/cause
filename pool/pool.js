@@ -1,5 +1,5 @@
 const { Record, Iterable, List, Map, Range, Set } = require("immutable");
-const { Cause, event, field } = require("cause");
+const { Cause, event, field, update } = require("cause");
 
 
 const Pool = Cause ("Pool",
@@ -38,14 +38,11 @@ const Pool = Cause ("Pool",
         allot(expanded(inPool, event)),
 
     // FIXME: We should do from ["notReady", ANY]
-    [event.in (Cause.Ready)]: (inPool, event, [, key]) =>
-        update(inPool.remoteIn(["notReady", key]),
-            Pool.Expand({ items:[inPool.notReady.get(key)] }))
-});
+    [event.on (Cause.Ready)]: (inPool, event, [, key]) =>
+        update(inPool.removeIn(["notReady", key]),
+            Pool.Expand({ items:[inPool.notReady.get(key)] })),
 
-Pool.OnReady = Cause("Pool.OnReady",
-{
-    [field `item`]: -1
+    [event.on `*` .from (["items", "*"])]: event.passthrough,
 });
 
 module.exports = Pool;
@@ -56,19 +53,20 @@ function expanded(inPool, { items: iterable, count })
     const sequence = iterable ?
         List(iterable) : Range(size, size + count);
     const divided = sequence
-        .groupBy(item => item instanceof Pool.OnReady);
+        .groupBy(item => Cause.Ready.is(item));
 
     const items = inPool.items
-        .concat(divided.get(false, List()));
+        .concat(divided.get(true, List()));
     const free = inPool.free.concat(iterable ?
         Range(size, size + items.size).toList() :
         items);
 
     const id = inPool.notReady.get("id");
-    const notReadyPairs = divided.get(true, List())
-        .map(({ item }, index) => [id + index, item])
+    const notReadyPairs = divided.get(false, List())
+        .map((item, index) => [id + index, item])
     const notReady = inPool.notReady
-        .concat(Map(notReadyPairs).set("id", notReadyPairs.size));
+        .concat(Map(notReadyPairs)
+            .set("id", notReadyPairs.size));
 
     return inPool.merge({ items, free, notReady });
 }

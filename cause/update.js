@@ -21,8 +21,13 @@ function update(inState, inEvent)
 
 function updateFromKeyPath(inState, inEvent, fromKeyPath)
 {
-//console.log("UPDATING " + type(inState).name + " with " + type(inEvent).name + " " + fromKeyPath);
-    return type(inState).update(inState, inEvent, fromKeyPath);
+const c = type(inState).update(inState, inEvent, fromKeyPath);
+if (c.length === 3) {
+console.log(c);
+console.log(Error().stack);
+//    process.exit(0);
+}
+return c;
 }
 
 function updateReduce(inState, inEvents)
@@ -52,9 +57,11 @@ function updatePair(inState, [keyPath, inEvent])
 
 function updateInKeyPath(inState, keyPath, inChildEvent)
 {
-    if (!keyPath)
-        return update(inState, inChildEvent);
-
+    if (!keyPath){
+        const x= update(inState, inChildEvent);
+        console.log(x);
+    return x;
+}
     const key = keyPath.data;
     const inChild = inState.get(key);
     const [outChild, midEvents, fromChildKeyPath] =

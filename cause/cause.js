@@ -4,7 +4,7 @@ const KeyPath = require("./key-path");
 
 const Event = typename => (fields, name) => Record(fields, `${typename}.${name}`);
 const fromMaybeTemplate = input =>
-    Array.isArray(input) ? input[0] : input;
+    Array.isArray(input) ? input.length > 1 ? input : input[0] : input;
 const isString = object => typeof object === "string";
 const type = record => Object.getPrototypeOf(record).constructor;
 const ANY_STATE = { };
@@ -13,6 +13,12 @@ const ANY_STATE = { };
 Cause.Start = Event("Cause")({ }, "Start");
 Cause.Finished = Event("Cause")({ value: 10 }, "Finished");
 Cause.Ready = Event("Cause")({ }, "Ready");
+Cause.Ready.is = cause =>
+    !(cause instanceof Record) ||
+    !cause.has("ready") || cause.ready;
+Cause.Ready.are = causes =>
+    causes.length <= 0 ||
+    causes.every(Cause.Ready.is);
 
 module.exports = Object.assign(Cause,
 {
@@ -22,6 +28,8 @@ module.exports = Object.assign(Cause,
     {
         ignore: (state, event) => [state, []],
         bubble: (state, event) => [state, [event]],
+        passthrough: (state, event, fromKeyPath) =>
+            [state, [event], fromKeyPath],
         in: declaration("event.in", "name"),
         out: declaration("event.out", "name"),
         on: declaration("event.on", "on", { from:-1 }),
@@ -74,9 +82,11 @@ function toCauseUpdate(eventsIn, definitions)
 {
     const stateless =
         toEventDescriptions(eventsIn, ANY_STATE, definitions);
+    // We .toList since Seq size returns undefined after flattening.
+    // https://github.com/facebook/immutable-js/issues/1585
     const stateful = definitions.toMap("state", (value, name) =>
         toEventDescriptions(eventsIn, name, getDefinitions(value)))
-        .valueSeq().flatten();
+        .valueSeq().flatten().toList();
     const handlers = stateful.concat(stateless);
     const hasStatefulUpdates = stateful.size > 0;
 
@@ -92,11 +102,13 @@ function toCauseUpdate(eventsIn, definitions)
         {
             const rname = type(state).name;
             const ename = etype.name;
-            const inStateMessage = hasStatefulUpdates?
-                "" : ` in state ${state.state}`;
+            const inStateMessage = hasStatefulUpdates ?
+                ` in state ${state.state}` : "";
+            const fromMessage = keyPath ? ` from ${keyPath}` : "";
+            const details = `${inStateMessage}${fromMessage}`;
 
             throw Error(
-                `${rname} does not respond to ${ename}${inStateMessage}`);
+                `${rname} does not respond to ${ename}${details}`);
         }
 
         const result = match.update(state, event, keyPath);

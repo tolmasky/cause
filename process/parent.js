@@ -5,15 +5,16 @@ const { serialize, deserialize } = require("cause/record");
 const Parent = Cause("Process.Parent",
 {
     [field `process`]: IO.start(start),
+    [field `ready`]: false,
 
-    [event.in `Ready`]: { },
-    [event.on `Ready`]: (parent, event) =>
-        [parent, [event]],
+    [event.on (Cause.Ready)]: (parent, event) =>
+        [parent.set("ready", true), [Cause.Ready()]],
 
     [event.in `Message`]: { event: -1 },
-    [event.on `Message`]: (parent, { event }) =>
-        (process.send({ serialized: serialize(event) }), parent),
-
+    [event.on `Message`]: (parent, { event }) => {
+        console.log("ABOUT TO ATTEMPT TO SEND" + event);
+        return (process.send({ serialized: serialize(event) }), parent);
+},
     [event.in `ParentMessage`]: { event: -1 },
     [event.on `ParentMessage`]: (parent, { event }) =>
         [parent, [event]]
@@ -25,5 +26,5 @@ function start(push)
 {
     process.on("message", ({ serialized }) =>
         push(Parent.ParentMessage({ event: deserialize(serialized) })));
-    push(Parent.Ready());
+    push(Cause.Ready());
 }
