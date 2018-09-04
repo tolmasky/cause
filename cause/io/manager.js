@@ -13,6 +13,9 @@ const Manager = Cause("Cause.IO.Manager",
     [field `registeredIOs`]: Map(),
     [field `deferredPush`]: () => { },
 
+    [event.on (Cause.Finished) .from `root`]: manager =>
+        [manager.set("root", null), [Cause.Finished()]],
+
     [event.from `root`]: (manager, event) => [manager, [event]],
 
     [event.on (Cause.Start)]: manager =>
@@ -21,11 +24,16 @@ const Manager = Cause("Cause.IO.Manager",
     [event.in `Route`]: { UUID:-1, event:-1 },
     [event.on `Route`]: (manager, { UUID, event }) => {
         const keyPath = getDescendentIOs(manager)[1].get(UUID);
+
+        if (!!keyPath)
+        {
         //console.log(getDescendentIOs(manager)[1], UUID);
     console.log("ROUTE " + event.__proto__.constructor.name + " " + keyPath);
         const x = updateRegisteredIOs(update.in(manager, keyPath, IO.Emit({ event })))
     //console.log(x+"");
-    return x;    
+    return x;    }
+
+    return manager;
     }
 });
 

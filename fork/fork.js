@@ -2,12 +2,8 @@ const { List } = require("immutable");
 const { Cause, field, event, state, update } = require("cause");
 const { Process, Message, node } = require("@cause/process");
 const Child = require("./child");
+const type = object => Object.getPrototypeOf(object).constructor;
 
-
-module.exports = function (type)
-{
-    return Fork.create({ type });
-}
 
 const Fork = Cause("Fork",
 {
@@ -16,9 +12,11 @@ const Fork = Cause("Fork",
     [field `process`]: -1,
     [field `backlog`]: List(),
 
-    init: ({ type }) =>
+    // Eventually we should be able to just pass a template and serialize it.
+    init: ({ type, fields }) =>
     {
-        const process = node({ path: __filename, args:[type.path] });
+        const args = [type.path, JSON.stringify(fields)];
+        const process = node({ path: __filename, args });
 
         return { process: update(process, Cause.Start())[0] };
     },
@@ -52,11 +50,14 @@ const Fork = Cause("Fork",
     }
 });
 
+module.exports = Fork;
+
 if (require.main === module)
 {
     const filename = process.argv[2];
+    const fields = JSON.parse(process.argv[3]);
     const type = require(filename);
     const IO = require("cause/io");
-
-    IO.toPromise(Child.create({ root: type.create() }));
+console.log("--->", fields, process.argv[3]);
+    IO.toPromise(Child.create({ root: type.create(fields) }));
 }
