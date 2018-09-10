@@ -44,7 +44,7 @@ const Route = Manager.Route;
 function updateRegisteredIOs([manager, events])
 {
     const { registeredIOs, deferredPush } = manager;
-    const [unregisteredIOs, presentIOs] = getDescendentIOs(manager);
+    const [unregisteredIOs, presentIOs] = getDescendentIOs(manager.root);
     const purgedIOs = registeredIOs.filter((cancel, UUID) =>
         presentIOs.has(UUID) || void(cancel && cancel()));
     const [updatedRoot, updatedIOs, nextUUID] =
@@ -54,7 +54,7 @@ function updateRegisteredIOs([manager, events])
             const push = event =>
                 deferredPush(Manager.Route({ UUID, event }));
             const event = IO.Register({ UUID });
-            const [updatedRoot] = update.in(root, keyPath.next, event);
+            const [updatedRoot] = update.in(root, keyPath, event);
             const updatedIOs = IOs.set(UUID, start(push));
 
             return [updatedRoot, updatedIOs, UUID + 1];
@@ -63,6 +63,9 @@ function updateRegisteredIOs([manager, events])
         .set("root", updatedRoot)
         .set("nextUUID", nextUUID)
         .set("registeredIOs", updatedIOs);
+
+    if (updated.root !== manager.root)
+        return updateRegisteredIOs([updated, events]);
 
     return [updated, events];
 }

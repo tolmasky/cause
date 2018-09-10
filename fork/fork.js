@@ -58,6 +58,6 @@ if (require.main === module)
     const fields = JSON.parse(process.argv[3]);
     const type = require(filename);
     const IO = require("cause/io");
-console.log("--->", fields, process.argv[3]);
+
     IO.toPromise(Child.create({ root: type.create(fields) }));
 }
