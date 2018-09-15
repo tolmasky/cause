@@ -6,7 +6,7 @@ const Pool = Cause ("Pool",
 {
     [field `backlog`]: List(),
     [field `free`]: List(),
-    [field `occupied`]: Set(),
+    [field `occupied`]: Map(),
     [field `items`]: List(),
     [field `notReady`]: Map({ id: 0 }),
 
@@ -31,7 +31,9 @@ const Pool = Cause ("Pool",
     [event.on `Release`]: (inPool, { indexes }) =>
         allot(inPool
             .set("free", inPool.free.concat(indexes))
-            .set("occupied", inPool.occupied.subtract(indexes))),
+            .set("occupied", indexes.reduce(
+                (occupied, index) => occupied.remove(index),
+                inPool.occupied))),
 
     [event.in `Expand`]: { items: void 0, count: -1 },
     [event.on `Expand`]: (inPool, event) =>
@@ -80,13 +82,13 @@ function allot(inPool)
 
     const dequeued = backlog.take(free.size);
     const indexes = free.take(dequeued.size);
+    const retainedPairs = indexes.zip(dequeued);
     const outPool = inPool
         .set("backlog", backlog.skip(dequeued.size))
         .set("free", free.skip(dequeued.size))
-        .set("occupied", occupied.concat(indexes));
-    const retains = dequeued.zipWith(
-        (request, index) => Pool.Retained({ request, index }),
-        indexes);
+        .set("occupied", occupied.concat(Map(retainedPairs)));
+    const retains = retainedPairs.map(
+        ([index, request]) => Pool.Retained({ request, index }));
 
     return [outPool, retains];
 }

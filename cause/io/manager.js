@@ -5,7 +5,8 @@ const IO = require("../io");
 const KeyPath = require("../key-path");
 const NoDescendentIOs = [List(), Map()];
 
-Error.stackTraceLimit = 1000;
+
+//Error.stackTraceLimit = 1000;
 const Manager = Cause("Cause.IO.Manager",
 {
     [field `root`]: -1,
@@ -22,18 +23,17 @@ const Manager = Cause("Cause.IO.Manager",
         updateRegisteredIOs(update.in(manager, "root", Cause.Start())),
 
     [event.in `Route`]: { UUID:-1, event:-1 },
-    [event.on `Route`]: (manager, { UUID, event }) => {
+    [event.on `Route`](manager, { UUID, event })
+    {
         const keyPath = getDescendentIOs(manager)[1].get(UUID);
 
-        if (!!keyPath)
-        {
-        //console.log(getDescendentIOs(manager)[1], UUID);
-    console.log("ROUTE " + event.__proto__.constructor.name + " " + keyPath);
-        const x = updateRegisteredIOs(update.in(manager, keyPath, IO.Emit({ event })))
-    //console.log(x+"");
-    return x;    }
+        // This handles the case where the receiver was removed from the tree.
+        if (!keyPath)
+            return manager;
 
-    return manager;
+        LOG_EVENT(event, keyPath);
+
+        return updateRegisteredIOs(update.in(manager, keyPath, IO.Emit({ event })));
     }
 });
 
@@ -121,6 +121,23 @@ Entry.prototype.push = function (key)
 {
     return new Entry(this.start, KeyPath(key, this.keyPath));
 }
+
+const LOG_EVENT = (function ()
+{
+    const { CAUSE_EVENTS } = process.env;
+
+    if (!CAUSE_EVENTS)
+        return () => { };
+
+    const types = CAUSE_EVENTS === "true" ?
+        true : Set(CAUSE_EVENTS.split(","));
+    const passes = types === true ?
+        () => true : event => types.contains(name(event));
+    const name = event => Object.getPrototypeOf(event).constructor.name;
+
+    return (event, keyPath) =>
+        passes(event) && console.log(`ROUTING ${name(event)} to ${keyPath}`);
+})();
 
 /*
 
