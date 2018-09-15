@@ -51,16 +51,16 @@ module.exports = Pool;
 
 function expanded(inPool, { items: iterable, count })
 {
-    const size = inPool.free.size;
+    const size = inPool.items.size;
     const sequence = iterable ?
         List(iterable) : Range(size, size + count);
     const divided = sequence
         .groupBy(item => Cause.Ready.is(item));
 
-    const items = inPool.items
-        .concat(divided.get(true, List()));
+    const ready = divided.get(true, List());
+    const items = inPool.items.concat(ready);
     const free = inPool.free.concat(iterable ?
-        Range(size, size + items.size).toList() :
+        Range(size, items.size).toList() :
         items);
 
     const id = inPool.notReady.get("id");
@@ -82,6 +82,7 @@ function allot(inPool)
 
     const dequeued = backlog.take(free.size);
     const indexes = free.take(dequeued.size);
+
     const retainedPairs = indexes.zip(dequeued);
     const outPool = inPool
         .set("backlog", backlog.skip(dequeued.size))
