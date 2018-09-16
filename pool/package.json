@@ -1,6 +1,6 @@
 {
   "name": "@cause/pool",
-  "version": "0.0.1-alpha.2",
+  "version": "0.0.1-alpha.3",
   "description": "",
   "main": "pool.js",
   "scripts": {
@@ -11,7 +11,7 @@
   "dependencies": {
   },
   "peerDependencies": {
-    "@cause/cause": "0.0.1-alpha.1",
+    "@cause/cause": "0.0.1-alpha.3",
     "immutable": "^3.8.2"
   },
   "license": "MIT"
