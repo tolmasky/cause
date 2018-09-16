@@ -11,7 +11,7 @@
   "dependencies": {
   },
   "peerDependencies": {
-    "cause": "0.0.1-alpha.1",
+    "@cause/cause": "0.0.1-alpha.1",
     "immutable": "^3.8.2"
   },
   "license": "MIT"
