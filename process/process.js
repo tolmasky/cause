@@ -11,7 +11,7 @@ const Process = Cause("Process",
     [field `kill`]: null,
 
     [field `state`]: "initial",
-    
+
     [field `path`]: -1,
     [field `args`]: [],
 
@@ -39,10 +39,12 @@ const Process = Cause("Process",
             .set("killOnStart", true),
 
         [event.on `ChildStarted`]: function (process, { send, pid })
-        {console.log(process.killOnStart);
+        {
             const updated = process
                 .set("state", "running")
-                .set("send", (...args) => (console.log("SENDING", args),send(...args)))
+
+                // FIXME: This should be IO!
+                .set("send", (...args) => send(...args))
                 .set("pid", pid);
             const started = Process.Started({ pid });
 

@@ -33,7 +33,7 @@ const Fork = Cause("Fork",
     [state `running`]:
     {
         [event.on (Cause.Ready) .from `process`](fork)
-        {console.log("got ready...");
+        {
             const [outFork, events] = update.in.reduce(
                 fork.set("ready", true)
                     .set("backlog", -1),

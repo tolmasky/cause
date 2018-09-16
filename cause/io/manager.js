@@ -14,8 +14,8 @@ const Manager = Cause("Cause.IO.Manager",
     [field `registeredIOs`]: Map(),
     [field `deferredPush`]: () => { },
 
-    [event.on (Cause.Finished) .from `root`]: manager =>
-        [manager.set("root", null), [Cause.Finished()]],
+    [event.on (Cause.Finished) .from `root`]: (manager, event) =>
+        [manager.set("root", null), [event]],
 
     [event.from `root`]: (manager, event) => [manager, [event]],
 
