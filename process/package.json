@@ -1,6 +1,6 @@
 {
   "name": "@cause/process",
-  "version": "1.0.0",
+  "version": "0.0.1-alpha.1",
   "description": "",
   "main": "./process",
   "scripts": {
@@ -11,5 +11,9 @@
   "license": "MIT",
   "dependencies": {
     "ps-tree": "^1.1.0"
+  },
+  "peerDependencies": {
+    "cause": "0.0.1-alpha.1",
+    "immutable": "^3.8.2"
   }
 }

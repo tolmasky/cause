@@ -1,6 +1,6 @@
 {
   "name": "@cause/pool",
-  "version": "1.0.0",
+  "version": "0.0.1-alpha.1",
   "description": "",
   "main": "pool.js",
   "scripts": {
@@ -9,9 +9,9 @@
   "keywords": [],
   "author": "Francisco Ryan Tolmasky I",
   "dependencies": {
-    "cause": "0.0.1"
   },
   "peerDependencies": {
+    "cause": "0.0.1-alpha.1",
     "immutable": "^3.8.2"
   },
   "license": "MIT"
