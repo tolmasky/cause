@@ -2,7 +2,7 @@ const { spawn, fork } = require("child_process");
 const { promisify } = require("util");
 const pstree = promisify(require("ps-tree"));
 const Process = require("./process");
-const { serialize, deserialize } = require("cause/record");
+const { serialize, deserialize } = require("@cause/cause/record");
 
 
 module.exports = function fork_(push, { path, args })

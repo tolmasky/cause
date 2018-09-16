@@ -1,5 +1,5 @@
 const { Record, Iterable, List, Map, Range, Set } = require("immutable");
-const { Cause, event, field, update } = require("cause");
+const { Cause, event, field, update } = require("@cause/cause");
 
 
 const Pool = Cause ("Pool",

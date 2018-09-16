@@ -1,4 +1,4 @@
-const { Cause, field, event, update } = require("cause");
+const { Cause, field, event, update } = require("@cause/cause");
 const { Parent, Message } = require("@cause/process/parent");
 
 

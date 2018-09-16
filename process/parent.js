@@ -1,5 +1,5 @@
-const { Cause, event, field, IO } = require("cause");
-const { serialize, deserialize } = require("cause/record");
+const { Cause, event, field, IO } = require("@cause/cause");
+const { serialize, deserialize } = require("@cause/cause/record");
 
 
 const Parent = Cause("Process.Parent",

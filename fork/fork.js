@@ -1,5 +1,5 @@
 const { List } = require("immutable");
-const { Cause, field, event, state, update } = require("cause");
+const { Cause, field, event, state, update } = require("@cause/cause");
 const { Process, Message, node } = require("@cause/process");
 const Child = require("./child");
 const type = object => Object.getPrototypeOf(object).constructor;
@@ -57,7 +57,7 @@ if (require.main === module)
     const filename = process.argv[2];
     const fields = JSON.parse(process.argv[3]);
     const type = require(filename);
-    const IO = require("cause/io");
+    const IO = require("@cause/cause/io");
 
     IO.toPromise(Child.create({ root: type.create(fields) }));
 }

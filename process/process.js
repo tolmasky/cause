@@ -1,4 +1,4 @@
-const { Cause, field, state, event, IO } = require("cause");
+const { Cause, field, state, event, IO } = require("@cause/cause");
 
 
 const Process = Cause("Process",
