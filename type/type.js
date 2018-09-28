@@ -14,10 +14,30 @@ function T([name])
                 { });
         const initializer = Record(fields, name);
         const is = value => value instanceof initializer;
-        const description = { initializer, is };
+        const serialize = serializeProduct;
+        const description = { serialize, types, initializer, is };
 
         return T_(description, name);
     }
+}
+
+function serializeProduct(inState, reference, type, value)
+{
+    const { types } = type[Description];
+    const storage = [];
+
+    return [Object.keys(types).reduce(function (state, key)
+    {
+        const [outState, UID] =
+            reference(state, types[key], value[key]);
+
+        return (storage.push(UID), outState);
+    }, inState), storage];
+}
+
+T.description = function Tdescription(type)
+{
+    return type[Description];
 }
 
 T.is = function (type)
@@ -25,11 +45,11 @@ T.is = function (type)
     return value => type[Description].is(value);
 }
 
-T.number = primitive("number", 0);
-T.string = primitive("string", "");
-T.boolean = primitive("boolean", false);
-T.regexp = primitive("regexp", /./g);
-T.object = primitive("object", null);
+T.number = primitive("number", 0, (s, _, __, v) => [s, v]);
+T.string = primitive("string", "", (s, _, __, v) => [s, v]);
+T.boolean = primitive("boolean", false, (s, _, __, v) => [s, v]);
+T.regexp = primitive("regexp", /./g, (s, _, __, v) => [s, v]);
+T.object = primitive("object", null, (s, _, __, v) => [s, v]);
 
 T.Map = parameterized(Map);
 T.Set = parameterized(Set);
@@ -43,20 +63,27 @@ T.Sum = function([name])
 {
     return function (...representations)
     {
-        const is = value => !!representations.find(type => T.is(type)(value));
+        const which = value => representations.findIndex(type => T.is(type)(value))
+        const is = value => which(value) >= 0;
         const initializer = () => representations[0][Description].initializer();
+        const serialize = () =>
+            (index => [index, representations[index][Description].serialize(value)])
+            (which(value));
+        const deserialize = storage =>
+            representations[storage[0]][Description].deserialize(storage[1]);
 
-        return T_({ initializer, is, representations });
+        return T_({ deserialize, serialize, initializer, is, representations }, name);
     }
 }
 
-function primitive(type, initial)
+function primitive(name, initial, serialize, root)
 {
     const initializer = () => initial;
-    const is = value => typeof value === type;
-    const direct = initial => primitive(type, initial);
-    
-    return T_({ initializer, direct, is }, type);
+    const is = value => typeof value === name;
+    const direct = initial => primitive(name, initial, serialize, type);
+    const type = T_({ initializer, direct, is, serialize, root }, name);
+
+    return type;
 }
 
 function parameterized(base)
