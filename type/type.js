@@ -1,39 +1,43 @@
-const { Map, Set, OrderedSet, List, Stack, Record } = require("immutable");
 const Description = Symbol("description");
-
-module.exports = T;
-
-function T([name])
+const forSumProduct = require("./for-sum-product");
+const type = module.exports = function type (declaration)
 {
-    return function (types)
-    {
-        const fields = Object.keys(types)
-            .map(name => [name, types[name][Description].initializer])
-            .reduce((fields, [name, initializer]) =>
-                (fields[name] = initializer(), fields),
-                { });
-        const initializer = Record(fields, name);
-        const is = value => value instanceof initializer;
-        const serialize = serializeProduct;
-        const description = { serialize, types, initializer, is };
-
-        return T_(description, name);
-    }
+    return construct(T => forSumProduct(type, T, declaration));
 }
 
-function serializeProduct(inState, reference, type, value)
+type.type = type;
+type.description = T => T[Description];
+
+type.is = (...args) => args.length < 2 ?
+    value => type.is(args[0], value) :
+    args[0][Description].is(args[1]);
+
+function construct (f)
 {
-    const { types } = type[Description];
-    const storage = [];
+    const T = () => call();
+    const description = f(T);
+    const call = description.call;
 
-    return [Object.keys(types).reduce(function (state, key)
-    {
-        const [outState, UID] =
-            reference(state, types[key], value[key]);
+    Object.defineProperty(T, "name", { value: description.typename });
+    Object.defineProperty(T, Description, { value: description });
+    Object.assign(T, description.keyedConstructors);
 
-        return (storage.push(UID), outState);
-    }, inState), storage];
+    return T;
 }
+
+/*T.Record = function Record (declaration)
+{
+    return construct(type => forRecord(T, type, declaration));
+}
+
+T.Maybe = function (type)
+{
+    
+}
+*/
+
+/*
+
 
 T.description = function Tdescription(type)
 {
@@ -98,17 +102,4 @@ function parameterized(base)
         return T_({ parameters, initializer, is }, name);
     }
 }
-
-function T_(description, name)
-{
-    const { initializer, direct } = description;
-    const call =
-        direct && ((...args) => direct(...args)) ||
-        initializer && ((...args) => initializer(...args)) ||
-        ((...args) => { throw TypeError(`${name} cannot be called directly`); });
-
-    Object.defineProperty(call, "name", { value: name });
-    Object.defineProperty(call, Description, { value: description });
-
-    return call;
-}
+*/
