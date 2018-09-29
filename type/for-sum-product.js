@@ -1,3 +1,4 @@
+const InspectSymbol = require("util").inspect.custom;
 const { Record } = require("immutable");
 const { getPrototypeOf } = Object;
 const { isArray } = Array;
@@ -8,9 +9,12 @@ const fNameParse = f => fNameRegExp.exec(f + "")[1];
 const fParseMap = farray => farray.map(f => [fNameParse(f), f()]);
 
 
-module.exports = function forSumProduct (type, T, declaration)
+module.exports = function forSumProduct (type, T, declaration, parameters)
 {
-    const typename = fNameParse(declaration);
+    const parameterNames = parameters.length <= 0 ?
+        "" :
+        `<${parameters.map(T => type.description(T).typename)}>`;
+    const typename = fNameParse(declaration) + parameterNames;
     const components = fParseMap(declaration(T));
 
     const isSum = components.every(([, c]) => isFunction(c));
@@ -48,7 +52,8 @@ function toConstructor(type, T, typename, name, properties)
         return Object.create(
         {
             constructor: { type: T },
-            toString: () => `${typename}.${name}`
+            toString: () => `${typename}.${name}`,
+            [InspectSymbol]: () => `${typename}.${name}`
         });
 
     const fields = properties

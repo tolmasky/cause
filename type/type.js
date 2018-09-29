@@ -1,8 +1,15 @@
 const Description = Symbol("description");
 const forSumProduct = require("./for-sum-product");
+const InspectSymbol = require("util").inspect.custom;
 const type = module.exports = function type (declaration)
 {
-    return construct(T => forSumProduct(type, T, declaration));
+    const evaluated = declaration(0);
+
+    // We are paramaterized
+    return typeof evaluated === "function" ?
+        (...args) => construct(T =>
+            forSumProduct(type, T, declaration(...args), args)) :
+        construct(T => forSumProduct(type, T, declaration, []));
 }
 
 type.type = type;
@@ -20,10 +27,37 @@ function construct (f)
 
     Object.defineProperty(T, "name", { value: description.typename });
     Object.defineProperty(T, Description, { value: description });
-    Object.assign(T, description.keyedConstructors);
+
+    Object.assign(T, { toString: () => description.typename });
+    Object.assign(T, { [InspectSymbol]: () => description.typename });
+
+    if (description.keyedConstructors)
+        Object.assign(T, description.keyedConstructors);
 
     return T;
 }
+
+const primitive = (function ()
+{
+    return (typename, initial, root) =>
+        construct(T => fromPrimitive(T, typename, initial, root));
+
+    function fromPrimitive(T, typename, initial, root)
+    {
+        const initializer = () => initial;
+        const is = value => typeof value === name;
+        const call = initial => primitive(typename, initial, root || T);
+
+        return { call, typename, is, root, initializer };
+    }
+})();
+
+type.string = primitive("string", "");
+type.number = primitive("number", 0);
+type.regexp = primitive("regexp", /./g);
+type.boolean = primitive("boolean", true);
+
+type.Maybe = type (T => Maybe => [Nothing => [], Just => [ value => T ]]);
 
 /*T.Record = function Record (declaration)
 {
