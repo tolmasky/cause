@@ -1,3 +1,4 @@
+const { Map, Set, OrderedSet, List, Stack } = require("immutable");
 const Description = Symbol("description");
 const forSumProduct = require("./for-sum-product");
 const InspectSymbol = require("util").inspect.custom;
@@ -21,7 +22,11 @@ type.is = (...args) => args.length < 2 ?
 
 function construct (f)
 {
-    const T = () => call();
+    const T = (...args) => call(...args);
+
+    // We should calculate the name first...
+    Object.defineProperty(T, Description, { writable:true, value: { typename:"RECURSIVE" } });
+
     const description = f(T);
     const call = description.call;
 
@@ -58,6 +63,34 @@ type.regexp = primitive("regexp", /./g);
 type.boolean = primitive("boolean", true);
 
 type.Maybe = type (T => Maybe => [Nothing => [], Just => [ value => T ]]);
+
+const collection = (function()
+{
+    return I => (...args) => construct(T => forCollection(T, I, args));
+
+    function forCollection(T, I, parameters)
+    {
+        const parameterNames =
+            `<${parameters.map(T => type.description(T).typename)}>`;
+        const typename = `${I.name}${parameterNames}`;
+
+        // We probably want something better than this, we're not checking
+        // the actual contents here.
+        const is = value => value instanceof I;
+        const initializer = I;
+        const call = I;
+
+        return { typename, call, initializer, is };
+    }
+})();
+
+type.Map = collection(Map);
+type.Set = collection(Set);
+type.OrderedSet = collection(OrderedSet);
+type.List = collection(List);
+type.Stack = collection(Stack);
+
+
 
 /*T.Record = function Record (declaration)
 {

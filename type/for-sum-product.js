@@ -17,16 +17,16 @@ module.exports = function forSumProduct (type, T, declaration, parameters)
     const typename = fNameParse(declaration) + parameterNames;
     const components = fParseMap(declaration(T));
 
-    const isSum = components.every(([, c]) => isFunction(c));
-    const isProduct = components.every(([, c]) => isArray(c));
+    const isSum = components.every(([, c]) => isArray(c));
+    const isProduct = components.every(([, c]) => isFunction(c));
 
     if (!isSum && !isProduct)
         throw TypeError(
             `Could not parse declaration for ${typename}. ` +
             `Perhaps you are mixing constructors and properties?`);
 
-    const products = isSum ?
-        [typename, fParseMap(components)] :
+    const products = isProduct ?
+        [[typename, components]] :
         components.map(([name, properties]) =>
             [name, fParseMap(properties)]);
 
@@ -34,7 +34,7 @@ module.exports = function forSumProduct (type, T, declaration, parameters)
         .map(([name, properties]) =>
             [name, toConstructor(type, T, typename, name, properties)]);
     const keyedConstructors = constructors.reduce(fromPairs, { });
-    const call = isSum ?
+    const call = isProduct ?
         constructors[0][1] :
         () => { throw TypeError(`${typename} is a type, not a constructor`) };
     const firstConstructor = constructors[0][1];
@@ -48,12 +48,15 @@ module.exports = function forSumProduct (type, T, declaration, parameters)
 
 function toConstructor(type, T, typename, name, properties)
 {
+    const prefixed = typename === name ?
+        typename : `${typename}.${name}`;
+
     if (properties.length === 0)
         return Object.create(
         {
             constructor: { type: T },
-            toString: () => `${typename}.${name}`,
-            [InspectSymbol]: () => `${typename}.${name}`
+            toString: () => prefixed,
+            [InspectSymbol]: () => prefixed
         });
 
     const fields = properties
@@ -61,9 +64,7 @@ function toConstructor(type, T, typename, name, properties)
             [name, type.description(T).initializer()])
         .reduce(fromPairs, { });
 
-    return Object.assign(
-        Record(fields, `${typename}.${name}`),
-        { type: T });
+    return Object.assign(Record(fields, prefixed), { type: T });
 }
 
 function fromPairs(object, [name, value])
