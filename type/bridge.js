@@ -79,9 +79,8 @@ const collection = (function()
         const is = value => value instanceof I;
         const initializer = I;
         const call = I;
-        const keyedConstructors = I;
 
-        return { typename, call, initializer, is, keyedConstructors };
+        return { typename, call, initializer, is };
     }
 })();
 
@@ -91,17 +90,6 @@ type.OrderedSet = collection(OrderedSet);
 type.List = collection(List);
 type.Stack = collection(Stack);
 
-
-type.fromNative = function (from)
-{
-    const { constructor } = from.prototype;
-    const typename = constructor.name;
-    const is = value => value instanceof constructor;
-    const initializer = (...args) => new constructor(...args);
-    const call = (...args) => new constructor(...args);
-
-    return construct(T => ({ typename, call, initializer, is }));
-}
 
 
 /*T.Record = function Record (declaration)
