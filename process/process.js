@@ -79,7 +79,7 @@ const Process = Cause("Process",
 });
 
 function onChildMessage(state, { event })
-{console.log("ON CHILD MESSAGE", event);
+{console.log("ON CHILD MESSAGE", Object.getPrototypeOf(event).constructor.name);
     return [state, [event]];
 }
 

@@ -1,6 +1,7 @@
 const { List, Map, ...I } = require("immutable");
 const Record = require("./record");
 const KeyPath = require("./key-path");
+const algebraic = require("@algebraic/type");
 
 const Event = typename => (fields, name) =>
     Record({ ...fields, fromKeyPath: void 0 },
@@ -35,6 +36,10 @@ module.exports = Object.assign(Cause,
         out: declaration("event.out", "name"),
         on: declaration("event.on", "on", { from:-1 }),
         from: declaration("event.on", "from"),
+        _on: function (type)
+        {
+            return JSON.stringify({ kind:"event.on", on: { UUID: algebraic.getUUID(type) } });
+        }
     },
     state: declaration("state", "name")
 });
@@ -94,9 +99,13 @@ function toCauseUpdate(eventsIn, definitions)
     return function update(state, event)
     {
         const etype = type(event);
+        const matches = on =>
+            on === false || (!!on.UUID ?
+                algebraic.is(algebraic.getTypeWithUUID(on.UUID), event) :
+                on.id === etype.id);
         const { fromKeyPath } = event;
         const match = handlers.find(({ on, from, inState }) =>
-            (on === false || on.id === etype.id) &&
+            matches(on) &&
             (!from || KeyPath.equal(fromKeyPath, from)) &&
             (inState === ANY_STATE || state.state === inState));
 
