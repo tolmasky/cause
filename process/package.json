@@ -13,7 +13,7 @@
     "ps-tree": "^1.1.0"
   },
   "peerDependencies": {
-    "@algebraic/type": "1.0.0-alpha.2",
+    "@algebraic/type": "1.0.0-alpha.3",
     "@cause/cause": "1.0.0-alpha.2",
     "immutable": "^3.8.2"
   }
