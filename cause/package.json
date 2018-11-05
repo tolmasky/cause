@@ -1,6 +1,6 @@
 {
   "name": "@cause/cause",
-  "version": "0.0.1-alpha.3",
+  "version": "1.0.0-alpha.1",
   "description": "",
   "main": "cause.js",
   "scripts": {

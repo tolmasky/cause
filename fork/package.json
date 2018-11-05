@@ -1,6 +1,6 @@
 {
   "name": "@cause/fork",
-  "version": "0.0.1-alpha.3",
+  "version": "1.0.0-alpha.1",
   "description": "",
   "main": "fork.js",
   "scripts": {
@@ -10,7 +10,7 @@
   "author": "Francisco Ryan Tolmasky I",
   "license": "MIT",
   "peerDependencies": {
-    "@cause/cause": "0.0.1-alpha.3",
+    "@cause/cause": "1.0.0-alpha.1",
     "immutable": "^3.8.2"
   }
 }
