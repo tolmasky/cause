@@ -1,6 +1,6 @@
 {
   "name": "@cause/process",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "",
   "main": "./process",
   "scripts": {
@@ -13,8 +13,8 @@
     "ps-tree": "^1.1.0"
   },
   "peerDependencies": {
-    "@algerbaic/type": "1.0.0-alpha.2",
-    "@cause/cause": "1.0.0-alpha.1",
+    "@algebraic/type": "1.0.0-alpha.2",
+    "@cause/cause": "1.0.0-alpha.2",
     "immutable": "^3.8.2"
   }
 }
