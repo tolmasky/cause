@@ -31,7 +31,7 @@ const Manager = Cause("Cause.IO.Manager",
         if (!keyPath)
             return manager;
 
-        LOG_EVENT(event, keyPath);
+//        LOG_EVENT(event, keyPath);
 
         return updateRegisteredIOs(update.in(manager, keyPath, IO.Emit({ event })));
     }

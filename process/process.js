@@ -59,9 +59,9 @@ const Process = Cause("Process",
         [event.on `ChildMessage`]: onChildMessage,
         [event.on `ChildExited`]: onChildExited,
 
-        [event.on `Kill`]: process => { console.log("here..."); return process
+        [event.on `Kill`]: process => process
             .set("state", "killing")
-            .set("kill", IO.start(push => spawn.kill(push, process.pid))) },
+            .set("kill", IO.start(push => spawn.kill(push, process.pid))),
 
         [event.on `Message`]: (process, { event }) =>
             (process.send(event), process),
@@ -79,12 +79,12 @@ const Process = Cause("Process",
 });
 
 function onChildMessage(state, { event })
-{console.log("ON CHILD MESSAGE", Object.getPrototypeOf(event).constructor.name);
+{//console.log("ON CHILD MESSAGE", Object.getPrototypeOf(event).constructor.name);
     return [state, [event]];
 }
 
 function onChildExited(state, { exitCode })
-{console.log("ON CHILD EXITED", exitCode);
+{//console.log("ON CHILD EXITED", exitCode);
     return [state.set("state", "finished"), Process.Finished({ exitCode })];
 }
 

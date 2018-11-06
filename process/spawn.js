@@ -48,11 +48,12 @@ module.exports.inferredDeserialize = inferredDeserialize;
 module.exports.kill = kill;
 
 function kill(push, pid)
-{console.log("KILLING " + pid);
+{
+    //console.log("KILLING " + pid);
     return pstree(pid)
         .then(children => children.map(({ PID }) => PID))
         .then(children => ["-s", "SIGINT", pid, ...children])
         .then(args => spawn("kill", args, { stdio:[0,1,2] }))
-        .then(() => console.log("TOTALLY KILLED!"))
+        //.then(() => console.log("TOTALLY KILLED!"))
         .catch(console.log);
 }
