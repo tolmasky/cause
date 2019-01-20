@@ -73,6 +73,7 @@ function reduce(update, inState, items)
     return items.reduce(function ([inState, midEvents], item)
     {
         const [outState, outEvents] = update(inState, item);
+
         const concatedEvents = midEvents && outEvents ?
             [...midEvents, ...outEvents] :
             midEvents || outEvents;

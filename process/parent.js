@@ -1,7 +1,6 @@
 const { Cause, event, field, IO } = require("@cause/cause");
-const { getUUID, serialize } = require("@algebraic/type");
 const legacy = require("@cause/cause/record");
-const { inferredDeserialize } = require("./spawn");
+const { inferredSerialize, inferredDeserialize } = require("./spawn");
 
 
 const Parent = Cause("Process.Parent",
@@ -29,15 +28,4 @@ function start(push)
         push(Parent.ParentMessage({ event: inferredDeserialize(message) })));
 
     push(Cause.Ready());
-}
-
-function inferredSerialize(event)
-{
-    const type = Object.getPrototypeOf(event).constructor;
-    const UUID = getUUID(type);
-
-    if (typeof UUID !== "string")
-        return { isLegacy: true, serialized: legacy.serialize(event) };
-
-    return { UUID, serialized: serialize(type, event) };
 }

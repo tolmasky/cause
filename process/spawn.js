@@ -4,7 +4,7 @@ const { promisify } = require("util");
 const pstree = promisify(require("ps-tree"));
 const Process = require("./process");
 const legacy = require("@cause/cause/record");
-const { getTypeWithUUID, deserialize } = require("@algebraic/type");
+const { getUUID, getTypeWithUUID, deserialize, serialize } = require("@algebraic/type");
 
 
 
@@ -27,8 +27,7 @@ module.exports = function fork_(push, { path, args })
         process.on("message", message =>
             push(Process.ChildMessage({ event: inferredDeserialize(message) })));
 
-        const send = event => process.send(
-            { isLegacy: true, serialized: legacy.serialize(event) });
+        const send = event => process.send(inferredSerialize(event));
         push(Process.ChildStarted({ pid, send }));
     }
 
@@ -44,6 +43,19 @@ function inferredDeserialize({ isLegacy, UUID, serialized })
 }
 
 module.exports.inferredDeserialize = inferredDeserialize;
+
+function inferredSerialize(event)
+{
+    const type = Object.getPrototypeOf(event).constructor;
+    const UUID = getUUID(type);
+
+    if (typeof UUID !== "string")
+        return { isLegacy: true, serialized: legacy.serialize(event) };
+
+    return { UUID, serialized: serialize(type, event) };
+}
+
+module.exports.inferredSerialize = inferredSerialize;
 
 module.exports.kill = kill;
 
