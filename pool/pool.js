@@ -40,7 +40,7 @@ const Pool = Cause ("Pool",
         allot(expanded(inPool, event)),
 
     // FIXME: We should do from ["notReady", ANY]
-    [event.on (Cause.Ready)]: (inPool, { fromKeyPath: [, key] }) =>
+    [event.on (Cause.Ready)]: (inPool, _, [, key]) =>
         update(inPool.removeIn(["notReady", key]),
             Pool.Expand({ items:[inPool.notReady.get(key)] })),
 

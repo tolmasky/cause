@@ -1,11 +1,15 @@
 const { List, Map, ...I } = require("immutable");
 const Record = require("./record");
+const LNode = require("./lnode");
 const KeyPath = require("./key-path");
 const algebraic = require("@algebraic/type");
 
+const DescendentEvent = algebraic.data `DescendentEvent` (
+    event       => Object,
+    fromKeyPath => LNode);
+
 const Event = typename => (fields, name) =>
-    Record({ ...fields, fromKeyPath: void 0 },
-        `${typename}.${name}`);
+    Record(fields, `${typename}.${name}`);
 const fromMaybeTemplate = input =>
     Array.isArray(input) ? input.length > 1 ? input : input[0] : input;
 const isString = object => typeof object === "string";
@@ -30,8 +34,8 @@ module.exports = Object.assign(Cause,
     event:
     {
         ignore: (state, event) => [state, []],
-        bubble: (state, event) => [state, [event]],
-        passthrough: (state, event) => [state, [event]],
+        passthrough: (state, event, fromKeyPath) =>
+            [state, [DescendentEvent({ event, fromKeyPath })]],
         in: declaration("event.in", "name"),
         out: declaration("event.out", "name"),
         on: declaration("event.on", "on", { from:-1 }),
@@ -96,14 +100,18 @@ function toCauseUpdate(eventsIn, definitions)
     const handlers = stateful.concat(stateless);
     const hasStatefulUpdates = stateful.size > 0;
 
-    return function update(state, event)
+    return function update(state, event, fromKeyPath)
     {
+        if (algebraic.is(DescendentEvent, event))
+            return update(state,
+                event.event,
+                KeyPath.concat(fromKeyPath, event.fromKeyPath));
+
         const etype = type(event);
         const matches = on =>
             on === false || (!!on.UUID ?
                 algebraic.is(algebraic.getTypeWithUUID(on.UUID), event) :
                 on.id === etype.id);
-        const { fromKeyPath } = event;
         const match = handlers.find(({ on, from, inState }) =>
             matches(on) &&
             (!from || KeyPath.equal(fromKeyPath, from)) &&
@@ -122,7 +130,7 @@ function toCauseUpdate(eventsIn, definitions)
                 `${rname} does not respond to ${ename}${details}`);
         }
 
-        const result = match.update(state, event);
+        const result = match.update(state, event, fromKeyPath);
 
         return Array.isArray(result) ? result : [result, []];
     }

@@ -11,12 +11,13 @@ module.exports = assign(update,
     in: assign(updateIn, { reduce: updateInReduce })
 });
 
-function update(inState, inEvent)
+function update(inState, inEvent, fromKeyPath)
 {
     if (inEvent === false)
         return [inState, []];
+
 //console.log("FOR " + inState + " " + inEvent);
-    return type(inState).update(inState, inEvent);
+    return type(inState).update(inState, inEvent, fromKeyPath);
 }
 
 function updateReduce(inState, inEvents)
@@ -51,15 +52,14 @@ function updateInKeyPath(inState, keyPath, inChildEvent)
 
     const key = keyPath.data;
     const inChild = inState.get(key);
-    const [outChild, midEvents] =
+    const [outChild, outEventsFromChild, fromChildKeyPath] =
         updateInKeyPath(inChild, keyPath.next, inChildEvent);
     const midState = inState.set(key, outChild);
-    const keyedEvents = midEvents.map(event =>
-        event.update("fromKeyPath", keyPath => KeyPath(key, keyPath)));
+    const fromKeyPath = KeyPath(key, fromChildKeyPath);
 
     return isCause(midState) ?
-        reduce(update, midState, keyedEvents) :
-        [midState, keyedEvents];
+        reduce(update, midState, outEventsFromChild, fromKeyPath) :
+        [midState, outEventsFromChild, fromKeyPath];
 }
 
 function isCause(state)
@@ -68,11 +68,11 @@ function isCause(state)
             typeof type(state).update === "function";
 }
 
-function reduce(update, inState, items)
+function reduce(update, inState, items, fromKeyPath)
 {
     return items.reduce(function ([inState, midEvents], item)
     {
-        const [outState, outEvents] = update(inState, item);
+        const [outState, outEvents] = update(inState, item, fromKeyPath);
 
         const concatedEvents = midEvents && outEvents ?
             [...midEvents, ...outEvents] :

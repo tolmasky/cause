@@ -21,6 +21,11 @@ KeyPath.from = function keyPathFrom(keyPath)
     return keyPath.reduceRight((next, data) => new LNode(data, next), undefined);
 }
 
+KeyPath.concat = function (lhs, rhs)
+{
+    return Array.from(lhs).reduceRight((next, data) => new LNode(data, next), rhs);
+}
+
 KeyPath.equal = function keyPathsEqual(lhs, rhs)
 {
     if (lhs === rhs)

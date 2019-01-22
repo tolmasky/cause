@@ -37,7 +37,7 @@ module.exports = function fork_(push, { path, args })
 function inferredDeserialize({ isLegacy, UUID, serialized })
 {
     if (isLegacy)
-        return legacy.deserialize(serialized).set("fromKeyPath", undefined);
+        return legacy.deserialize(serialized);
 
     return deserialize(getTypeWithUUID(UUID), serialized);
 }
