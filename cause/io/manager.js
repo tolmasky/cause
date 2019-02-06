@@ -102,6 +102,7 @@ function canContainIOs(node)
         return false;
 
     return  node instanceof Record ||
+            // Hack until we use real types to determine this.
             ((node["@@__IMMUTABLE_KEYED__@@"] ||
             node["@@__IMMUTABLE_INDEXED__@@"]) && node.size > 0 && canContainIOs(node.first()));
 }
