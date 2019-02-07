@@ -64,7 +64,7 @@ function expanded(inPool, { items: iterable, count })
         Range(size, items.size).toList() :
         items);
 
-    const id = inPool.notReady.nextID;
+    const id = inPool.nextID;
     const notReadyPairs = divided.get(false, List())
         .map((item, index) => [id + index, item])
     const notReady = inPool.notReady
