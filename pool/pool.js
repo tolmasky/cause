@@ -8,7 +8,8 @@ const Pool = Cause ("Pool",
     [field `free`]: List(),
     [field `occupied`]: Map(),
     [field `items`]: List(),
-    [field `notReady`]: Map({ id: 0 }),
+    [field `notReady`]: Map(),
+    [field `nextID`]: 0,
 
     init: ({ items, count }) =>
         expanded(Pool(), { items, count }),
@@ -63,14 +64,14 @@ function expanded(inPool, { items: iterable, count })
         Range(size, items.size).toList() :
         items);
 
-    const id = inPool.notReady.get("id");
+    const id = inPool.notReady.nextID;
     const notReadyPairs = divided.get(false, List())
         .map((item, index) => [id + index, item])
     const notReady = inPool.notReady
-        .concat(Map(notReadyPairs)
-            .set("id", notReadyPairs.size));
+        .concat(Map(notReadyPairs));
+    const nextID = notReadyPairs.size;
 
-    return inPool.merge({ items, free, notReady });
+    return inPool.merge({ items, free, notReady, nextID });
 }
 
 function allot(inPool)
