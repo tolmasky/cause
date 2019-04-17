@@ -1,5 +1,5 @@
 const { Record, fromJS } = require("immutable");
-const ErrorRegExp = /^Error\n(?:\s+at[^\n]+\n){2}\s+at\s+([^\(]+\(([^\)]+)[^\n]+)/;
+const ErrorRegExp = /^Error:?\s*\n(?:\s+at[^\n]+\n){2}\s+at\s+([^\(]+\(([^\)]+)[^\n]+)/;
 const LocationRegExp = /^.+\:\d+\:\d+$/;
 const constructors = Object.create(null);
 const type = object => Object.getPrototypeOf(object).constructor;
