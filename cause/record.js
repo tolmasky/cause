@@ -1,4 +1,8 @@
 const { Record, fromJS } = require("immutable");
+
+// FIXME: It's not clear why we need the ":". I believe it might be due to
+// source-map modifying the stack trace.
+// https://github.com/runkitdev/cause/issues/4
 const ErrorRegExp = /^Error:?\s*\n(?:\s+at[^\n]+\n){2}\s+at\s+([^\(]+\(([^\)]+)[^\n]+)/;
 const LocationRegExp = /^.+\:\d+\:\d+$/;
 const constructors = Object.create(null);
