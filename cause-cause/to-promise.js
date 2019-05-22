@@ -19,7 +19,7 @@ module.exports = function toPromise(root)
 
             // THE ONLY MUTATION!
             mutableManager = updated;
-
+console.log("MANAGER IS NOW: " + mutableManager);
             if (finished)
                 (settle => settle(finished.value))
                     (finished.rejected ? reject : resolve);

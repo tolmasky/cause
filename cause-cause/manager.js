@@ -1,11 +1,13 @@
-const { data, parameterized, number, ftype, is } = require("@algebraic/type");
-const { Map } = require("@algebraic/collections");
+const { data, parameterized, number, ftype, is, getKind } = require("@algebraic/type");
+const { List, Map } = require("@algebraic/collections");
 const Cause = require("@cause/cause");
 
 const KeyPath = require("./key-path");
 const update = require("./update");
+const getType = record => Object.getPrototypeOf(record).constructor;
+const NoDescendentIOs = [List(Entry)(), Map(number, Function)()];
 
-
+console.log(parameterized.is(List, List(number)));
 const Manager = parameterized (function (T)
 {
     const Manager = data `Cause.Manager<${T}>` (
@@ -27,7 +29,7 @@ const Manager = parameterized (function (T)
         .on(Manager.Route, (manager, { UUID, event }) =>
         {
             const keyPath = getDescendentIOs(manager)[1].get(UUID);
-    
+
             // This handles the case where the receiver was removed from the tree.
             if (!keyPath)
                 return manager;
@@ -94,9 +96,9 @@ const Route = Manager.Route;
 */
 function updateRegisteredIOs([manager, events])
 {
-    const { registeredIOs, deferredPush } = manager;
+    const { registeredCauses, deferredPush } = manager;
     const [unregisteredIOs, presentIOs] = getDescendentIOs(manager.root);
-    const purgedIOs = registeredIOs.filter((cancel, UUID) =>
+    const purgedIOs = registeredCauses.filter((cancel, UUID) =>
         presentIOs.has(UUID) || void(cancel && cancel()));
     const [updatedRoot, updatedIOs, nextUUID] =
         unregisteredIOs.reduce(function ([root, IOs, UUID], entry)
@@ -110,15 +112,17 @@ function updateRegisteredIOs([manager, events])
 
             return [updatedRoot, updatedIOs, UUID + 1];
         }, [manager.root, purgedIOs, manager.nextUUID]);
-    const updated = manager
-        .set("root", updatedRoot)
-        .set("nextUUID", nextUUID)
-        .set("registeredIOs", updatedIOs);
+    const updated = getType(manager)
+    ({
+        ...manager,
+        root: updatedRoot,
+        nextUUID,
+        registeredCauses: updatedIOs
+    });
 
-    if (updated.root !== manager.root)
-        return updateRegisteredIOs([updated, events]);
-
-    return [updated, events];
+    return updated.root !== manager.root ?
+        updateRegisteredIOs([updated, events]) :
+        [updated, events];
 }
 
 function getDescendentIOs(node)
@@ -131,20 +135,40 @@ function getDescendentIOs(node)
 
 function getComputedDescendentIOs(node)
 {
-    return node instanceof IO ?
+    const type = getType(node);
+console.log("CHECKING " + parameterized.is(List, type));
+    return parameterized.is(Cause, type) ?
         node.needsRegistration ?
-            [List.of(new Entry(node.start)), Map()] :
-            [List(), Map([[node.UUID, undefined]])] :
-        node.keySeq().reduce(function (accumulated, key)
-        {
-            const descendents = getDescendentIOs(node.get(key));
+            [List(Entry)([new Entry(node.start)]), Map(number, Function)()] :
+            [List(Entry)(), Map(number, Function)([[node.UUID, undefined]])] :
+        !(getKind(type) === data)/*
+        parameterized.is(List, type) ||
+        parameterized.is(Map, type)*/ ?
+            node.keySeq()
+                .reduce(accumulate(
+                    key => key,
+                    (key, collection) => collection.get(key)),
+                    NoDescendentIOs) :
+            data.fields(type)
+                .reduce(accumulate(
+                    ([key]) => key,
+                    (key, object) => object[key]),
+                    NoDescendentIOs);
+
+    function accumulate(toKey, getter)
+    {
+       return function accumulate(accumulated, item)
+       {
+            const key = toKey(item);
+            const descendents = getDescendentIOs(getter(key, node));
             const unregistered = accumulated[0]
                 .concat(descendents[0].map(entry => entry.push(key)));
             const registered = accumulated[1]
                 .concat(descendents[1].map(keyPath => KeyPath(key, keyPath)));
 
             return [unregistered, registered];
-        }, NoDescendentIOs);
+       }
+    }
 }
 
 function canContainIOs(node)
@@ -152,7 +176,10 @@ function canContainIOs(node)
     if (!node || typeof node !== "object")
         return false;
 
-    return  node instanceof Record ||
+    const type = getType(node);
+    const kind = getKind(type);
+
+    return  kind === data ||
             // Hack until we use real types to determine this.
             ((node["@@__IMMUTABLE_KEYED__@@"] ||
             node["@@__IMMUTABLE_INDEXED__@@"]) && node.size > 0 && canContainIOs(node.first()));

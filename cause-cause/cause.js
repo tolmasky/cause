@@ -1,9 +1,10 @@
-const { data, union, parameterized, ftype } = require("@algebraic/type");
+const { data, union, parameterized, ftype, boolean } = require("@algebraic/type");
 
 const Cause = parameterized (function (T)
 {
     const Cause = data `Cause<${T}>` (
-        start => ftype );
+        start => ftype,
+        needsRegistration => [boolean, true] );
 
     Cause.Started = data `Cause<${T}>.Started` (); 
     Cause.Completed = union `Cause.Completed<${T}>` (
