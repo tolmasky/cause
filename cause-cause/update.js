@@ -1,4 +1,4 @@
-const { is } = require("@algebraic/type");
+const { is, data, getKind } = require("@algebraic/type");
 const { assign } = Object;
 const { isArray } = Array;
 const { Iterable: { isIndexed } } = require("immutable");
@@ -87,13 +87,16 @@ function updateInKeyPath(inState, keyPath, inChildEvent)
     if (!keyPath)
         return update(inState, inChildEvent);
 
-    const key = keyPath.data;
-    const inChild = inState[key];
+    const key = keyPath.data;console.log("UPDATING " + inState + " " + keyPath);
+    const isCollection = getKind(type(inState)) !== data;
+    const inChild = isCollection ? inState.get(key) : inState[key];
     const [outChild, outEventsFromChild, fromChildKeyPath] =
         updateInKeyPath(inChild, keyPath.next, inChildEvent);
-    const midState = inChild !== outChild ?
-        type(inState)({ ...inState, [key]: outChild }) :
-        inState;
+    const midState = isCollection ?
+        inState.set(key, outChild) :
+        inChild !== outChild ?
+            type(inState)({ ...inState, [key]: outChild }) :
+            inState;
     const fromKeyPath = KeyPath(key, fromChildKeyPath);
 
     return isCause(midState) ?

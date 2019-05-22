@@ -32,7 +32,7 @@ Process.start = (command, arguments, cwd) =>
             arguments: List(string)(arguments),
             cwd
         }),
-        spawnCause: fromAsync(number, () => console.log("DO IT"))
+        spawnCause: fromAsync(number, async () => { console.log("DO IT"); return 0; })
     });
 
 module.exports = Process;
