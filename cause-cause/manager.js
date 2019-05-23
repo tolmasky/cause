@@ -8,6 +8,11 @@ const getType = record => Object.getPrototypeOf(record).constructor;
 const NoDescendentIOs = [List(Entry)(), Map(number, Function)()];
 
 console.log(parameterized.is(List, List(number)));
+
+const Route = data `Route` (
+    UUID    => number,
+    event   => Object );
+
 const Manager = parameterized (function (T)
 {
     const Manager = data `Cause.Manager<${T}>` (
@@ -17,8 +22,8 @@ const Manager = parameterized (function (T)
         deferredPush        => [ftype, () => { }] );
 
     Manager.update = update
-        .on(Cause.Finished, "root",
-            (mananger, event) => [Manager({ root: null }), [event]])
+//        .on(Cause.Finished, "root",
+//            (mananger, event) => [Manager({ root: null }), [event]])
 
         .on(false, "root",
             (mananger, event) => [manager, [event]])
@@ -26,7 +31,7 @@ const Manager = parameterized (function (T)
         .on(Cause.Start, manager =>
             updateRegisteredIOs(update.in(manager, "root", Cause.Start)))
 
-        .on(Manager.Route, (manager, { UUID, event }) =>
+        .on(Route, (manager, { UUID, event }) =>
         {
             const keyPath = getDescendentIOs(manager)[1].get(UUID);
 
@@ -36,19 +41,14 @@ const Manager = parameterized (function (T)
 
     //        LOG_EVENT(event, keyPath);
 
-            return updateRegisteredIOs(update.in(manager, keyPath, IO.Emit({ event })));
+            return updateRegisteredIOs(update.in(manager, keyPath, Cause.Emit({ event })));
         });
 
 
     return Manager;
 } );
 
-Manager.Route = data `Manager.Route` (
-    UUID    => number,
-    event   => Object );
-
 module.exports = Manager;
-
 
 /*const { List, Map, Record, Range, Set } = require("immutable");
 const { Cause, field, event } = require("../cause");
@@ -105,8 +105,8 @@ function updateRegisteredIOs([manager, events])
         {
             const { start, keyPath } = entry;
             const push = event =>
-                deferredPush(Manager.Route({ UUID, event }));
-            const event = IO.Register({ UUID });
+                deferredPush(Route({ UUID, event }));
+            const event = Cause.Register({ UUID });
             const [updatedRoot] = update.in(root, keyPath, event);
             const updatedIOs = IOs.set(UUID, start(push));
 
@@ -136,7 +136,7 @@ function getDescendentIOs(node)
 function getComputedDescendentIOs(node)
 {
     const type = getType(node);
-console.log("CHECKING " + parameterized.is(List, type));
+
     return parameterized.is(Cause, type) ?
         node.needsRegistration ?
             [List(Entry)([new Entry(node.start)]), Map(number, Function)()] :

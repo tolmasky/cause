@@ -8,14 +8,17 @@ const Cause = parameterized (function (T)
         needsRegistration   => [boolean, true] );
 
     CauseT.Started = data `Cause<${T}>.Started` ();
-    CauseT.Completed = union `Cause.Completed<${T}>` (
-        data `Succeeded<${T}>` (
+    CauseT.Completed = union `Cause<${T}>.Completed` (
+        data `Succeeded` (
             value => T ),
-        data `Failed<${T}>` (
+        data `Failed` (
             error => Object ) );
 
     CauseT.update = require("./update")
-        .on(Cause.Register, (cause, { UUID }) => CauseT({ ...cause, UUID }));
+        .on(Cause.Register, (cause, { UUID }) =>
+            CauseT({ ...cause, UUID, needsRegistration: false }))
+        .on(Cause.Emit, (cause, { event }) =>
+            [cause, [event]]);
 
     return CauseT;
 });
@@ -23,6 +26,9 @@ const Cause = parameterized (function (T)
 Cause.Start = data `Cause.Start` ();
 Cause.Register = data `Cause.Register` (
     UUID => number );
+
+Cause.Emit = data `Cause.Emit` (
+    event => Object );
 
 
 module.exports = Cause;

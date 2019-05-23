@@ -1,9 +1,11 @@
-const { is, data, getKind } = require("@algebraic/type");
+const { is, data, getKind, getTypename } = require("@algebraic/type");
 const { assign } = Object;
 const { isArray } = Array;
 const { Iterable: { isIndexed } } = require("immutable");
 const KeyPath = require("./key-path");
-const type = record => Object.getPrototypeOf(record).constructor;
+const type = record => 
+    (X => X === Function ? record : X)
+    (Object.getPrototypeOf(record).constructor);
 
 
 module.exports = assign(update,
@@ -13,7 +15,7 @@ module.exports = assign(update,
     on: (function toUpdate(cases)
     {
         const update = function update(inState, inEvent, fromKeyPath)
-        {
+        {console.log(cases);
             const match = cases.find(([type, from]) =>
                 (!from || KeyPath.equal(fromKeyPath, from)) &&
                 is(type, inEvent));
@@ -21,7 +23,7 @@ module.exports = assign(update,
             if (!match)
             {
                 const rname = getTypename(type(inState));
-                const ename = getTypename(type(inState));
+                const ename = getTypename(type(inEvent));
                 const fromMessage = fromKeyPath ? ` from ${fromKeyPath}` : "";
     
                 throw Error(
@@ -53,7 +55,6 @@ function update(inState, inEvent, fromKeyPath)
         return [inState, []];
 
 //console.log("FOR " + inState + " " + inEvent);
-console.log(type(inState));
     return type(inState).update(inState, inEvent, fromKeyPath);
 }
 
@@ -87,7 +88,7 @@ function updateInKeyPath(inState, keyPath, inChildEvent)
     if (!keyPath)
         return update(inState, inChildEvent);
 
-    const key = keyPath.data;console.log("UPDATING " + inState + " " + keyPath);
+    const key = keyPath.data;
     const isCollection = getKind(type(inState)) !== data;
     const inChild = isCollection ? inState.get(key) : inState[key];
     const [outChild, outEventsFromChild, fromChildKeyPath] =
