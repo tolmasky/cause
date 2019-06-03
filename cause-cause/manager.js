@@ -159,7 +159,7 @@ function getComputedDescendentIOs(node)
     {
        return function accumulate(accumulated, item)
        {
-            const key = toKey(item);
+            const key = toKey(item);console.log("CHECKING " + key);
             const descendents = getDescendentIOs(getter(key, node));
             const unregistered = accumulated[0]
                 .concat(descendents[0].map(entry => entry.push(key)));
@@ -177,12 +177,12 @@ function canContainIOs(node)
         return false;
 
     const type = getType(node);
-    const kind = getKind(type);
+    const kind = getKind(type);console.log(type + kind + " CAN contain IOs?...");
 
     return  kind === data ||
             // Hack until we use real types to determine this.
             ((node["@@__IMMUTABLE_KEYED__@@"] ||
-            node["@@__IMMUTABLE_INDEXED__@@"]) && node.size > 0 && canContainIOs(node.first()));
+            node["@@__IMMUTABLE_INDEXED__@@"]));
 }
 
 function Entry(start, keyPath)
