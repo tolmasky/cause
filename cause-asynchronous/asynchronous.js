@@ -1,8 +1,12 @@
-const { data, union, parameterized, is } = require("@algebraic/type");
+const { data, union, parameterized, is, primitives } = require("@algebraic/type");
 const { List } = require("@algebraic/collections");
 const Cause = require("@cause/cause");
 const update = require("@cause/cause/update");
 const getType = object => Object.getPrototypeOf(object).constructor;
+
+const Any = union `Any` (
+    Object,
+    ...Object.values(primitives).filter(x => x !== primitives.primitive && x !== primitives) );
 
 
 const Asynchronous = parameterized(T =>
@@ -14,7 +18,7 @@ const Asynchronous = parameterized(T =>
         data `Running` (
             cause => Cause(T) ),
         data `Success` ( value => T ),
-        data `Failure` ( error => Object ) );
+        data `Failure` ( error => Any ) );
 
     Asynchronous.Completed = union `Asynchronous<${T}>.Completed` (
         Asynchronous.Success,
@@ -44,6 +48,7 @@ const Asynchronous = parameterized(T =>
 
 Asynchronous.from = function (T, fAsync)
 {
+T = Any;
     const CauseT = Cause(T);
     const start = function start (push)
     {
@@ -59,17 +64,18 @@ Asynchronous.from = function (T, fAsync)
 }
 
 module.exports = Asynchronous;
-console.log(Asynchronous(Object).Success);
+console.log(Asynchronous(Any).Success);
 const Dependent = union `Dependent` (
-    data `Blocked` (
+    data `Waiting` (
         action       => Function,
         dependencies => List(Dependency) ),
     data `DependenciesRunning` (
         action       => Function,
         dependencies => List(Dependency) ),
-    data `Running` ( ),
-    Asynchronous(Object).Success,
-    Asynchronous(Object).Failure );
+    data `Running` (
+        action  => Asynchronous(Any) ),
+    Asynchronous(Any).Success,
+    Asynchronous(Any).Failure );
 
 const Dependency = union `Dependency` (
     Asynchronous,
@@ -77,45 +83,64 @@ const Dependency = union `Dependency` (
 
 Asynchronous.p = function p(actionOrOperator)
 {
-    return (...dependencies) => Dependent.Blocked(
+    return (...dependencies) => Dependent.from(
     {
         action: toAction(actionOrOperator),
         dependencies: List(Dependent)(dependencies)
     });
 }
 
+Asynchronous.p.success = function success(value)
+{
+    return Asynchronous(Any).Success({ value });
+}
+
 Asynchronous.p.state = Asynchronous.p;
 
 
-Dependent.Blocked.update = update
-    .on(Cause.Start, (blocked, event) =>
+Dependent.Waiting.update = update
+    .on(Cause.Start, (waiting, event) =>
     {
         console.log("STARTED");
-        return [blocked, []];
+        return [waiting, []];
     })
-    .on(Asynchronous(Object).Running, (blocked, event, fromKeyPath) =>
-        [Dependent.DependenciesRunning({ ...blocked }), []]);
-console.log(Asynchronous(Object).Success);
+    .on(Asynchronous(Any).Running, (waiting, event, fromKeyPath) =>
+        [Dependent.from(waiting), []]);
+
 Dependent.DependenciesRunning.update = update
-    .on(Asynchronous(Object).Running, (dependenciesRunning, event) =>
-        [dependenciesRunning, []])
-    .on(Asynchronous(Object).Success, (dependenciesRunning, event, fromKeyPath) =>
-    {console.log("HERE...");
-        return dependenciesRunning.dependencies
-            .every(item => is (Asynchronous(Object).Success, item)) ?
-                [Asynchronous(Object).Success({ value: "DONE" }), []] :
-                [dependenciesRunning, []];
-    });
-
-/*.state = function (actionOrOperator)
-{
-    const action = toAction(actionOrOperator);
-
-    return function (...dependencies)
+    .on(Cause.Start, (waiting, event) =>
     {
-        return Dependent.Blocked({ action, dependencies });
+        console.log("STARTED");
+        return [waiting, []];
+    })
+    .on(Asynchronous(Any).Running, (dependenciesRunning, event) =>
+        [dependenciesRunning, []])
+    .on(Asynchronous(Any).Success, (dependenciesRunning, event) =>
+        Dependent.from(dependenciesRunning))
+    .on(Asynchronous(Any).Failure, (dependenciesRunning, event) =>
+        Dependent.from(dependenciesRunning))
+
+
+Dependent.from = function ({ dependencies, action })
+{
+    const { Success, Failure } = Asynchronous(Any);
+
+    if (dependencies.some(is(Failure)))
+        return Failure;
+
+    if (dependencies.every(is(Success)))
+    {
+        const value = action(...dependencies.map(success => success.value));
+
+        return Asynchronous(Any).Success({ value });
     }
-}*/
+
+    if (dependencies.every(item =>
+        !is(Asynchronous(Any).Waiting, item) && !is(Dependent.Waiting, item)))
+        return Dependent.DependenciesRunning({ dependencies, action });
+
+    return Dependent.Waiting({ dependencies, action });
+}
 
 const toAction = (function ()
 {
@@ -125,7 +150,7 @@ const toAction = (function ()
         "-": (lhs, rhs) => lhs - rhs,
         "*": (lhs, rhs) => lhs * rhs,
         "/": (lhs, rhs) => lhs / rhs,
-        "%": (lhs, rhs) => lhs / rhs,       
+        "%": (lhs, rhs) => lhs / rhs,
         "**": (lhs, rhs) => lhs ** rhs,
         "u(-)": value => -value,
         "u(+)": value => +value,
