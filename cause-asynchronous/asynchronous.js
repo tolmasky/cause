@@ -1,29 +1,65 @@
-const { data, union, parameterized } = require("@algebraic/type");
+const { data, union, parameterized, is } = require("@algebraic/type");
 const { List } = require("@algebraic/collections");
 const Cause = require("@cause/cause");
 const update = require("@cause/cause/update");
+const getType = object => Object.getPrototypeOf(object).constructor;
 
-const Result = parameterized ((Success, Failure) =>
-    union `Result<${Success}, ${Failure}>` (
-        data `Success` ( value => Success ),
-        data `Failure` ( value => Failure ) ) );
 
-const Asynchronous = parameterized(function (Result)
+const Asynchronous = parameterized(T =>
 {
-    const Asynchronous = union `Asynchronous<${Result}>` (
+    const CauseT = Cause(T);
+    const Asynchronous = union `Asynchronous<${T}>` (
         data `Waiting` (
-            action => Function ),
-        data `Running` (),
-        Result);
+            cause => Cause(T) ),
+        data `Running` (
+            cause => Cause(T) ),
+        data `Success` ( value => T ),
+        data `Failure` ( error => Object ) );
 
-    Asynchronous.bridge = action =>
-        Asynchronous.Waiting({ action });
+    Asynchronous.Completed = union `Asynchronous<${T}>.Completed` (
+        Asynchronous.Success,
+        Asynchronous.Failure );
+
+    Asynchronous.Waiting.update = update
+        .on(CauseT.Started, (waiting, event, fromKeyPath) =>
+        [
+            Asynchronous.Running({ ...waiting }),
+            [Asynchronous.Running({ ...waiting })]
+        ]);
+
+    Asynchronous.Running.update = update
+        .on(CauseT.Completed.Succeeded, (waiting, event, fromKeyPath) =>
+        [
+            Asynchronous.Success({ ...event }),
+            [Asynchronous.Success({ ...event })]
+        ])
+        .on(CauseT.Completed.Failed, (waiting, event, fromKeyPath) =>
+        [
+            Asynchronous.Failure({ ...event }),
+            [Asynchronous.Failure({ ...event })]
+        ]);
 
     return Asynchronous;
 });
 
-module.exports = Asynchronous;
+Asynchronous.from = function (T, fAsync)
+{
+    const CauseT = Cause(T);
+    const start = function start (push)
+    {
+        fAsync()
+            .then(value => push(CauseT.Completed.Succeeded({ value })))
+            .catch(error => push(CauseT.Completed.Failed({ error })));
 
+        push(CauseT.Started);
+    };
+    const cause = CauseT({ start });
+
+    return Asynchronous(T).Waiting({ cause });
+}
+
+module.exports = Asynchronous;
+console.log(Asynchronous(Object).Success);
 const Dependent = union `Dependent` (
     data `Blocked` (
         action       => Function,
@@ -32,7 +68,8 @@ const Dependent = union `Dependent` (
         action       => Function,
         dependencies => List(Dependency) ),
     data `Running` ( ),
-    Result(Object, Object) );
+    Asynchronous(Object).Success,
+    Asynchronous(Object).Failure );
 
 const Dependency = union `Dependency` (
     Asynchronous,
@@ -56,14 +93,19 @@ Dependent.Blocked.update = update
         console.log("STARTED");
         return [blocked, []];
     })
-    .on(Cause(Object).Started, (blocked, event, fromKeyPath) =>
+    .on(Asynchronous(Object).Running, (blocked, event, fromKeyPath) =>
         [Dependent.DependenciesRunning({ ...blocked }), []]);
-
+console.log(Asynchronous(Object).Success);
 Dependent.DependenciesRunning.update = update
-    .on(Cause(Object).Started, (dependenciesRunning, event) =>
+    .on(Asynchronous(Object).Running, (dependenciesRunning, event) =>
         [dependenciesRunning, []])
-    .on(Cause(Object).Completed.Succeeded, (dependenciesRunning, event, fromKeyPath) =>
-        [Result(Object, Object).Success({ value: event.value }), []]);
+    .on(Asynchronous(Object).Success, (dependenciesRunning, event, fromKeyPath) =>
+    {console.log("HERE...");
+        return dependenciesRunning.dependencies
+            .every(item => is (Asynchronous(Object).Success, item)) ?
+                [Asynchronous(Object).Success({ value: "DONE" }), []] :
+                [dependenciesRunning, []];
+    });
 
 /*.state = function (actionOrOperator)
 {
