@@ -25,6 +25,8 @@ const Asynchronous = parameterized(T =>
         Asynchronous.Failure );
 
     Asynchronous.Waiting.update = update
+        .on(Cause.Start, (waiting, event, fromKeyPath) =>
+            [waiting, []])
         .on(CauseT.Started, (waiting, event, fromKeyPath) =>
         [
             Asynchronous.Running({ ...waiting }),
@@ -108,6 +110,8 @@ Dependent.Waiting.update = update
     })
     .on(Asynchronous(Any).Running, (waiting, event, fromKeyPath) =>
         [Dependent.from(waiting), []])
+    .on(Dependent.Running, (waiting, event, fromKeyPath) =>
+        [Dependent.from(waiting), []])
     .on(Dependent.DependenciesRunning, (waiting, event, fromKeyPath) =>
         [Dependent.from(waiting), []])
     .on(Asynchronous(Any).Success, (dependenciesRunning, event) =>
@@ -123,14 +127,25 @@ Dependent.DependenciesRunning.update = update
     })
     .on(Asynchronous(Any).Running, (dependenciesRunning, event) =>
         Dependent.from(dependenciesRunning, true))
+    .on(Dependent.DependenciesRunning, (waiting, event, fromKeyPath) =>
+        [Dependent.from(waiting), []])
     .on(Asynchronous(Any).Success, (dependenciesRunning, event) =>
         Dependent.from(dependenciesRunning, true))
     .on(Asynchronous(Any).Failure, (dependenciesRunning, event) =>
         Dependent.from(dependenciesRunning, true))
 
+Dependent.Running.update = update
+    .on(Asynchronous(Any).Success, (running, event) =>
+    {
+        console.log("YUP, GOT SUCCESS");
+        console.log(event);
+
+        return [event, [event]];
+    })
+    .on(Any, running => running);
 
 Dependent.from = function ({ dependencies, action }, FIXME_events = false)
-{
+{console.log("in here...");
     const result = toResult();
 
     return FIXME_events ? [result, [result]] : result;
@@ -146,7 +161,10 @@ Dependent.from = function ({ dependencies, action }, FIXME_events = false)
         {
             const value = action(...dependencies.map(success => success.value));
 
-            return Asynchronous(Any).Success({ value });
+            if (typeof value === "number")
+                return Asynchronous(Any).Success({ value });
+
+            return Dependent.Running({ action: value });
         }
 
         if (dependencies.every(item =>
