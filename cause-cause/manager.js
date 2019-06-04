@@ -25,8 +25,8 @@ const Manager = parameterized (function (T)
 //        .on(Cause.Finished, "root",
 //            (mananger, event) => [Manager({ root: null }), [event]])
 
-        .on(false, "root",
-            (mananger, event) => [manager, [event]])
+        .on(Object, "root",
+            (manager, event) => [manager, [event]])
 
         .on(Cause.Start, manager =>
             updateRegisteredIOs(update.in(manager, "root", Cause.Start)))
@@ -159,7 +159,7 @@ function getComputedDescendentIOs(node)
     {
        return function accumulate(accumulated, item)
        {
-            const key = toKey(item);console.log("CHECKING " + key);
+            const key = toKey(item);
             const descendents = getDescendentIOs(getter(key, node));
             const unregistered = accumulated[0]
                 .concat(descendents[0].map(entry => entry.push(key)));
@@ -177,7 +177,7 @@ function canContainIOs(node)
         return false;
 
     const type = getType(node);
-    const kind = getKind(type);console.log(type + kind + " CAN contain IOs?...");
+    const kind = getKind(type);
 
     return  kind === data ||
             // Hack until we use real types to determine this.

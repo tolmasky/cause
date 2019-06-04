@@ -20,7 +20,7 @@ module.exports = assign(update,
             const match = cases.find(([type, from]) =>
                 (!from || KeyPath.equal(fromKeyPath, from)) &&
                 is(type, inEvent));
-    
+
             if (!match)
             {
                 const rname = getTypename(type(inState));
@@ -40,7 +40,7 @@ module.exports = assign(update,
         {
             const [from, handler] =
                 rest.length === 1 ? [false, rest[0]] :
-                rest.length === 2 ? rest :
+                rest.length === 2 ? [KeyPath.from(rest[0]), rest[1]] :
                 (() => { throw Error("Wrong number of arguments") })();
     
             return toUpdate([...cases, [type, from, handler]]);

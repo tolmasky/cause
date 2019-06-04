@@ -105,7 +105,13 @@ Dependent.Waiting.update = update
         return [waiting, []];
     })
     .on(Asynchronous(Any).Running, (waiting, event, fromKeyPath) =>
-        [Dependent.from(waiting), []]);
+        [Dependent.from(waiting), []])
+    .on(Dependent.DependenciesRunning, (waiting, event, fromKeyPath) =>
+        [Dependent.from(waiting), []])
+    .on(Asynchronous(Any).Success, (dependenciesRunning, event) =>
+        Dependent.from(dependenciesRunning, true))
+    .on(Asynchronous(Any).Failure, (dependenciesRunning, event) =>
+        Dependent.from(dependenciesRunning, true))
 
 Dependent.DependenciesRunning.update = update
     .on(Cause.Start, (waiting, event) =>
@@ -114,32 +120,39 @@ Dependent.DependenciesRunning.update = update
         return [waiting, []];
     })
     .on(Asynchronous(Any).Running, (dependenciesRunning, event) =>
-        [dependenciesRunning, []])
+        Dependent.from(dependenciesRunning, true))
     .on(Asynchronous(Any).Success, (dependenciesRunning, event) =>
-        Dependent.from(dependenciesRunning))
+        Dependent.from(dependenciesRunning, true))
     .on(Asynchronous(Any).Failure, (dependenciesRunning, event) =>
-        Dependent.from(dependenciesRunning))
+        Dependent.from(dependenciesRunning, true))
 
 
-Dependent.from = function ({ dependencies, action })
+Dependent.from = function ({ dependencies, action }, FIXME_events = false)
 {
-    const { Success, Failure } = Asynchronous(Any);
+    const result = toResult();
 
-    if (dependencies.some(is(Failure)))
-        return Failure;
+    return FIXME_events ? [result, [result]] : result;
 
-    if (dependencies.every(is(Success)))
+    function toResult()
     {
-        const value = action(...dependencies.map(success => success.value));
+        const { Success, Failure } = Asynchronous(Any);
 
-        return Asynchronous(Any).Success({ value });
+        if (dependencies.some(is(Failure)))
+            return Failure;
+
+        if (dependencies.every(is(Success)))
+        {
+            const value = action(...dependencies.map(success => success.value));
+
+            return Asynchronous(Any).Success({ value });
+        }
+
+        if (dependencies.every(item =>
+            !is(Asynchronous(Any).Waiting, item) && !is(Dependent.Waiting, item)))
+            return Dependent.DependenciesRunning({ dependencies, action });
+
+        return Dependent.Waiting({ dependencies, action });
     }
-
-    if (dependencies.every(item =>
-        !is(Asynchronous(Any).Waiting, item) && !is(Dependent.Waiting, item)))
-        return Dependent.DependenciesRunning({ dependencies, action });
-
-    return Dependent.Waiting({ dependencies, action });
 }
 
 const toAction = (function ()

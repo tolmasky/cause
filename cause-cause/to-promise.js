@@ -1,3 +1,4 @@
+const { is } = require("@algebraic/type");
 const Cause = require("./cause");
 const update = require("./update");
 const Manager = require("./manager");
@@ -11,11 +12,11 @@ module.exports = function toPromise(T, root)
         const deferredPush = event => setImmediate(function ()
         {
             const [updated, events] = update(mutableManager, event);
-            const finished = events.reduce((finished, event) =>
+            const finished = false;/*events.reduce((finished, event) =>
                 finished ||
                     void(channel.emit(event)) ||
-                    event instanceof Cause.Finished && event,
-                null);
+                    is(Cause.Finshed, event) && event,
+                null);*/
 
             // THE ONLY MUTATION!
             mutableManager = updated;
