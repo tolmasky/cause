@@ -46,6 +46,8 @@ const Asynchronous = parameterized(T =>
     return Asynchronous;
 });
 
+Asynchronous.Any = Any;
+
 Asynchronous.from = function (T, fAsync)
 {
 T = Any;

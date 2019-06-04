@@ -3,6 +3,7 @@ const Cause = require("./cause");
 const update = require("./update");
 const Manager = require("./manager");
 const getType = object => Object.getPrototypeOf(object).constructor;
+const Asynchronous = require("@cause/asynchronous");
 
 module.exports = function toPromise(T, root)
 {
@@ -11,12 +12,12 @@ module.exports = function toPromise(T, root)
     {
         const deferredPush = event => setImmediate(function ()
         {
-            const [updated, events] = update(mutableManager, event);
-            const finished = false;/*events.reduce((finished, event) =>
+            const [updated, events] = update(mutableManager, event);console.log(events);
+            const finished = events.reduce((finished, event) =>
                 finished ||
                     void(channel.emit(event)) ||
-                    is(Cause.Finshed, event) && event,
-                null);*/
+                    is(Asynchronous(Asynchronous.Any).Completed, event) && event,
+                null);
 
             // THE ONLY MUTATION!
             mutableManager = updated;
