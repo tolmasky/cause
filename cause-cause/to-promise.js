@@ -3,7 +3,8 @@ const Cause = require("./cause");
 const update = require("./update");
 const Manager = require("./manager");
 const getType = object => Object.getPrototypeOf(object).constructor;
-const Asynchronous = require("@cause/asynchronous");
+const Task = require("@cause/task");
+const Dependent = require("@cause/task/dependent");
 
 module.exports = function toPromise(T, root)
 {
@@ -16,12 +17,13 @@ module.exports = function toPromise(T, root)
             const finished = events.reduce((finished, event) =>
                 finished ||
                     void(channel.emit(event)) ||
-                    is(Asynchronous(Asynchronous.Any).Completed, event) && event,
+                    is(Dependent.Dependency.Success, event) && event,
                 null);
 
             // THE ONLY MUTATION!
             mutableManager = updated;
-console.log("MANAGER IS NOW: " + mutableManager.root);//toString(0)(mutableManager.root));
+
+// console.log("MANAGER IS NOW: " + mutableManager.root);//toString(0)(mutableManager.root));
             if (finished)
                 (settle => settle(finished.value))
                     (finished.rejected ? reject : resolve);
