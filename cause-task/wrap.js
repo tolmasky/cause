@@ -64,6 +64,8 @@ const toFunction = (function ()
         "u(typeof)": value => typeof value,
         "in": (lhs, rhs) => lhs in rhs,
         "instancoef": (lhs, rhs) => lhs instanceof rhs,
+
+        ".": (lhs, rhs) => lhs[rhs]
     };
 
     return actionOrOperator =>
