@@ -10,12 +10,12 @@ const Argument = data `Argument` (
 
 const Dependent  = union `Task.Dependent` (
     data `Initial` (
-        action          => Function,
+        lifted          => boolean,
         initial         => [List(Argument), List(Argument)()],
         completed       => [List(Argument), List(Argument)()] ),
 
     data `Unblocking` (
-        action          => Function,
+        lifted          => boolean,
         initial         => [List(Argument), List(Argument)()],
         started         => [List(Argument), List(Argument)()],
         completed       => [List(Argument), List(Argument)()] ),
@@ -71,16 +71,16 @@ Dependency.Completed = union `Task.Dependency.Completed` (
     Dependency.Success,
     Dependency.Failure );
 
-Dependent.Initial.from = function ({ action, dependencies })
+Dependent.Initial.from = function from({ lifted, callee, arguments })
 {
-    const arguments = List(Argument)(dependencies.map(
-        (dependency, index) => Argument({ index, dependency })));
-    const initial = arguments.filter(({ dependency }) =>
+    const dependencies = List(Argument)([callee, ...arguments].map(
+        (dependency, index) => Argument({ index: index - 1, dependency })));
+    const initial = dependencies.filter(({ dependency }) =>
         is(Dependency.Initial, dependency));
-    const completed = arguments.filter(({ dependency }) =>
+    const completed = dependencies.filter(({ dependency }) =>
         is(Dependency.Completed, dependency));
 
-    return Dependent.Initial({ action, initial, completed });
+    return Dependent.Initial({ lifted, initial, completed });
 }
 
 Dependent.Initial.update = update
@@ -129,11 +129,13 @@ console.log("HERE!!!" ,event);
             return andEvents(Dependent.DependencyFailure({ failures }));
         }
 
-        const arguments = successes
+        const [f, ...arguments] = successes
             .sortBy(({ index }) => index)
             .map(({ dependency }) => dependency.value);
-        const task = dependent.action(...arguments);
-
+        console.log("F IS " + f + " "+ typeof f);
+        const value = f(...arguments);
+        const task = dependent.lifted ? Dependent.Success({ value }) : value;
+console.log("great");
         if (is(Dependency.Success, task))
             return andEvents(Dependent.Success({ ...task }));
 

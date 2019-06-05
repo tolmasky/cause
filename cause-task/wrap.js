@@ -2,24 +2,14 @@ const Task = require("./task");
 const { Dependent, Dependency } = require("./dependent");
 
 
-module.exports = function (functionOrOperator)
+module.exports = function (callee, ...arguments)
 {
-    return (...dependencies) => Dependent.Initial.from(
-    {
-        action: toFunction(functionOrOperator),
-        dependencies
-    });
+    return Dependent.Initial.from({ lifted: false, callee, arguments });
 }
 
-module.exports.lift = function (functionOrOperator)
+module.exports.lift = function (callee, ...arguments)
 {
-    const f = toFunction(functionOrOperator);
-
-    return module.exports(function (...args)
-    {
-        try { return Task.Success({ value: f(...args) }) }
-        catch (error) { return Task.Failure({ error }) };
-    });
+    return Dependent.Initial.from({ lifted: true, callee, arguments });
 }
 
 module.exports.success = function (value)
@@ -27,49 +17,46 @@ module.exports.success = function (value)
     return Task.Success({ value });
 }
 
-const toFunction = (function ()
+const operators = Object.entries(
 {
-    const operators =
-    {
-        "+": (lhs, rhs) => lhs + rhs,
-        "-": (lhs, rhs) => lhs - rhs,
-        "*": (lhs, rhs) => lhs * rhs,
-        "/": (lhs, rhs) => lhs / rhs,
-        "%": (lhs, rhs) => lhs / rhs,
-        "**": (lhs, rhs) => lhs ** rhs,
-        "u(-)": value => -value,
-        "u(+)": value => +value,
+    "+": (lhs, rhs) => lhs + rhs,
+    "-": (lhs, rhs) => lhs - rhs,
+    "*": (lhs, rhs) => lhs * rhs,
+    "/": (lhs, rhs) => lhs / rhs,
+    "%": (lhs, rhs) => lhs / rhs,
+    "**": (lhs, rhs) => lhs ** rhs,
+    "u(-)": value => -value,
+    "u(+)": value => +value,
 
-        "&": (lhs, rhs) => lhs & rhs,
-        "|": (lhs, rhs) => lhs | rhs,
-        "^": (lhs, rhs) => lhs ^ rhs,
-        "<<": (lhs, rhs) => lhs << rhs,
-        ">>": (lhs, rhs) => lhs >> rhs,
-        ">>>": (lhs, rhs) => lhs >> rhs,
-        "u(~)": value => ~value,
+    "&": (lhs, rhs) => lhs & rhs,
+    "|": (lhs, rhs) => lhs | rhs,
+    "^": (lhs, rhs) => lhs ^ rhs,
+    "<<": (lhs, rhs) => lhs << rhs,
+    ">>": (lhs, rhs) => lhs >> rhs,
+    ">>>": (lhs, rhs) => lhs >> rhs,
+    "u(~)": value => ~value,
 
-        "==": (lhs, rhs) => lhs == rhs,
-        "===": (lhs, rhs) => lhs === rhs,
-        "!=": (lhs, rhs) => lhs != rhs,
-        "!==": (lhs, rhs) => lhs !== rhs,
-        ">": (lhs, rhs) => lhs > rhs,
-        ">=": (lhs, rhs) => lhs >= rhs,
-        "<": (lhs, rhs) => lhs < rhs,
-        "<=": (lhs, rhs) => lhs <= rhs,
+    "==": (lhs, rhs) => lhs == rhs,
+    "===": (lhs, rhs) => lhs === rhs,
+    "!=": (lhs, rhs) => lhs != rhs,
+    "!==": (lhs, rhs) => lhs !== rhs,
+    ">": (lhs, rhs) => lhs > rhs,
+    ">=": (lhs, rhs) => lhs >= rhs,
+    "<": (lhs, rhs) => lhs < rhs,
+    "<=": (lhs, rhs) => lhs <= rhs,
 
-        "&&": (lhs, rhs) => lhs == rhs,
-        "||": (lhs, rhs) => lhs === rhs,
-        "u(!)": value => !value,
+    "&&": (lhs, rhs) => lhs == rhs,
+    "||": (lhs, rhs) => lhs === rhs,
+    "u(!)": value => !value,
 
-        "u(typeof)": value => typeof value,
-        "in": (lhs, rhs) => lhs in rhs,
-        "instancoef": (lhs, rhs) => lhs instanceof rhs,
+    "u(typeof)": value => typeof value,
+    "in": (lhs, rhs) => lhs in rhs,
+    "instancoef": (lhs, rhs) => lhs instanceof rhs,
 
-        ".": (lhs, rhs) => lhs[rhs]
-    };
+    ".": (lhs, rhs) => (value =>
+        typeof value === "function" ?
+            value.bind(lhs) : value)(lhs[rhs])
+});
 
-    return actionOrOperator =>
-        typeof actionOrOperator === "function" ?
-            actionOrOperator :
-            (...args) => operators[actionOrOperator](...args);
-})();
+for (const [operator, f] of operators)
+    module.exports[operator] = Task.Success({ value: f });
