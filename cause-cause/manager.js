@@ -29,7 +29,7 @@ const Manager = parameterized (function (T)
             (manager, event) => [manager, [event]])
 
         .on(Cause.Start, manager =>
-            updateRegisteredIOs(update.in(manager, "root", Cause.Start)))
+            updateRegisteredIOs([manager, []]))//update.in(manager, "root", Cause.Start)))
 
         .on(Route, (manager, { UUID, event }) =>
         {
