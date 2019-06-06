@@ -55,7 +55,9 @@ const operators = Object.entries(
 
     ".": (lhs, rhs) => (value =>
         typeof value === "function" ?
-            value.bind(lhs) : value)(lhs[rhs])
+            value.bind(lhs) : value)(lhs[rhs]),
+
+    "=([])": (...args) => args
 });
 
 for (const [operator, f] of operators)
