@@ -45,8 +45,8 @@ const operators = Object.entries(
     "<": (lhs, rhs) => lhs < rhs,
     "<=": (lhs, rhs) => lhs <= rhs,
 
-    "&&": (lhs, rhs) => lhs == rhs,
-    "||": (lhs, rhs) => lhs === rhs,
+    "&&": (lhs, rhs) => lhs && rhs,
+    "||": (lhs, rhs) => lhs || rhs,
     "u(!)": value => !value,
 
     "u(typeof)": value => typeof value,

@@ -31,7 +31,7 @@ const Dependent  = union `Task.Dependent` (
         value           => any ),
 
     data `InternalFailure` (
-        failure         => Task.Failure ),
+        failure         => Dependency.Failure ),
 
     data `DependencyFailure` (
         failures        => List(Dependency.Failure) ) );
@@ -123,10 +123,13 @@ console.log("HERE!!!" ,event);
 
         if (successes.size !== completed.size)
         {
-            const failures = completed.filter(({ dependency }) =>
-                is(Dependency.Failure, dependency));
+            const failures = completed
+                .filter(({ dependency }) =>
+                    is(Dependency.Failure, dependency));
 
-            return andEvents(Dependent.DependencyFailure({ failures }));
+            return failures.size === 1 ?
+                andEvents(failures.get(0).dependency) :
+                andEvents(Dependent.DependencyFailure({ failures }));
         }
 
         const [f, ...arguments] = successes
@@ -140,8 +143,14 @@ console.log("great");
             return andEvents(Dependent.Success({ ...task }));
 
         return andEvents(Dependent.Unblocked({ task }));
-    });
-
+    })
+/*
+    .on(any, dependent =>
+    {
+        console.log("swallowing");
+        return [dependent, []]
+    })
+*/
 Dependent.Unblocked.update = update
     .on(Dependency.Started, (unblocked, event) =>
         andEvents(Dependent.Running({ ...unblocked }) ) )
@@ -151,8 +160,11 @@ Dependent.Running.update = update
         andEvents(Dependent.Success({ ...event }) ) )
 
     .on(Dependency.Failure, (running, event) =>
-        andEvents(Dependent.InternalFailure({ failure: event }) ) )
-    
+        andEvents(event) )//Dependent.InternalFailure({ failure: event }) ) )
+
+    // Ignore anything else from the internal task.
+    .on(any, dependent => [dependent, []]);
+
 function andEvents(value)
 {
     return [value, [value]];

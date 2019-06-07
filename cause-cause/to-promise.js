@@ -4,7 +4,7 @@ const update = require("./update");
 const Manager = require("./manager");
 const getType = object => Object.getPrototypeOf(object).constructor;
 const Task = require("@cause/task");
-const Dependent = require("@cause/task/dependent");
+const { Dependency } = require("@cause/task/dependent");
 
 module.exports = function toPromise(T, root)
 {
@@ -17,7 +17,7 @@ module.exports = function toPromise(T, root)
             const finished = events.reduce((finished, event) =>
                 finished ||
                     void(channel.emit(event)) ||
-                    is(Dependent.Dependency.Success, event) && event,
+                    is(Dependency.Completed, event) && event,
                 null);
 
             // THE ONLY MUTATION!
@@ -25,8 +25,8 @@ module.exports = function toPromise(T, root)
 
 // console.log("MANAGER IS NOW: " + mutableManager.root);//toString(0)(mutableManager.root));
             if (finished)
-                (settle => settle(finished.value))
-                    (finished.rejected ? reject : resolve);
+                is(Dependency.Success, finished) ?
+                    resolve(finished.value) : reject(finished.error);
         });
         const type = getType(root);
         let mutableManager = Manager(T)({ root, deferredPush });

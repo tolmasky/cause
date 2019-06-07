@@ -15,8 +15,9 @@ module.exports = assign(update,
     on: (function toUpdate(cases)
     {
         const update = function update(inState, inEvent, fromKeyPath)
-        {console.log(cases);
-        console.log("GOT EVENT " + inEvent);
+        {
+            // console.log(cases);
+            // console.log("GOT EVENT " + inEvent + " in " + inState);
             const match = cases.find(([type, from]) =>
                 (!from || KeyPath.equal(fromKeyPath, from)) &&
                 is(type, inEvent));
