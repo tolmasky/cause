@@ -83,6 +83,20 @@ Dependent.Initial.from = function from({ lifted, callee, arguments })
     return Dependent.Initial({ lifted, initial, completed });
 }
 
+Dependent.from = function from({ lifted, callee, arguments })
+{
+    const dependencies = List(Argument)([callee, ...arguments].map(
+        (dependency, index) => Argument({ index: index - 1, dependency })));
+    const initial = dependencies.filter(({ dependency }) =>
+        is(Dependency.Initial, dependency));
+    const completed = dependencies.filter(({ dependency }) =>
+        is(Dependency.Completed, dependency));
+
+    return initial.size === 0 ?
+        Dependent.Unblocked.from({ lifted, completed }) :
+        Dependent.Initial({ lifted, initial, completed });
+}
+
 Dependent.Initial.update = update
     .on(Dependency.Started, (dependent, event, [_, index]) =>
         andEvents(Dependent.Unblocking(
@@ -117,40 +131,40 @@ Dependent.Unblocking.update = update
         if (started.size > 0 || initial.size > 0)
             return Dependent.Unblocking(
                 { ...dependent, initial, started, completed });
-console.log("HERE!!!" ,event);
-        const successes = completed.filter(({ dependency }) =>
+
+        const { lifted } = dependent;
+        const unblocked = Dependent.Unblocked.from({ lifted, completed });
+
+        return andEvents(unblocked);
+    });
+
+Dependent.Unblocked.from = function ({ lifted, completed })
+{
+    const successes = completed
+        .filter(({ dependency }) =>
             is(Dependency.Success, dependency));
 
-        if (successes.size !== completed.size)
-        {
-            const failures = completed
-                .filter(({ dependency }) =>
-                    is(Dependency.Failure, dependency));
-
-            return failures.size === 1 ?
-                andEvents(failures.get(0).dependency) :
-                andEvents(Dependent.DependencyFailure({ failures }));
-        }
-
-        const [f, ...arguments] = successes
-            .sortBy(({ index }) => index)
-            .map(({ dependency }) => dependency.value);
-        console.log("F IS " + f + " "+ typeof f);
-        const value = f(...arguments);
-        const task = dependent.lifted ? Dependent.Success({ value }) : value;
-console.log("great");
-        if (is(Dependency.Success, task))
-            return andEvents(Dependent.Success({ ...task }));
-
-        return andEvents(Dependent.Unblocked({ task }));
-    })
-/*
-    .on(any, dependent =>
+    if (successes.size !== completed.size)
     {
-        console.log("swallowing");
-        return [dependent, []]
-    })
-*/
+        const failures = completed
+            .filter(({ dependency }) =>
+                is(Dependency.Failure, dependency));
+
+        return failures.size === 1 ?
+            failures.get(0).dependency :
+            Dependent.DependencyFailure({ failures });
+    }
+
+    const [f, ...arguments] = successes
+        .sortBy(({ index }) => index)
+        .map(({ dependency }) => dependency.value);
+    const value = f(...arguments);
+
+    return  lifted ? Dependent.Success({ value }) :
+            is(Dependency.Success, value) ? Dependent.Success({ ...value }) :
+            Dependent.Unblocked({ task: value });
+}
+
 Dependent.Unblocked.update = update
     .on(Dependency.Started, (unblocked, event) =>
         andEvents(Dependent.Running({ ...unblocked }) ) )

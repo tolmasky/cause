@@ -39,7 +39,7 @@ function spawn(command, args = [], options = { })
 
             const output = { stdout: "", stderr: "" };
 
-            const { pid } = process;console.log(pid);
+            const { pid } = process;
             const success = pid !== void 0;
             const cancel = success && (() => kill(0, pid));
 
