@@ -11,6 +11,14 @@ module.exports = function toPromise(T, root)
     const channel = { emit: () => { } };    
     const promise = new Promise(function (resolve, reject)
     {
+        const finish = dependency =>
+            is(Dependency.Success, dependency) ?
+                    resolve(dependency.value) :
+                    reject(dependency.error);
+
+        if (is (Dependency.Completed, root))
+            return finish(root);
+
         const deferredPush = event => setImmediate(function ()
         {
             const [updated, events] = update(mutableManager, event);console.log(events);

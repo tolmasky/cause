@@ -5,6 +5,93 @@ const t = require("@babel/types");
 const Scope = require("./scope");
 
 
+module.exports = function (f, free)
+{
+    const { parseExpression } = require("@babel/parser");
+    const [scope, transformed] = fromAST(parseExpression(`(${f})`));
+
+    const parameters = Object.keys(free || { });
+    const missing = scope.free.subtract(parameters);
+
+    if (missing.size > 0)
+        throw Error("Missing values for " + missing.join(", "));
+
+    const { default: generate } = require("@babel/generator");
+    const code = `return ${generate(transformed).code}`;
+    const args = parameters.map(parameter => free[parameter]);
+
+    return (new Function(...parameters, code))(...args);
+}
+
+const fromIfStatements = (function ()
+{
+    const template = require("@babel/template").default;
+    const toReturnIf = template(
+        `return (%%test%% ? ` +
+        `(() => { %%consequent%% })() : ` +
+        `(() => { %%alternate%% })())`);
+
+    return function fromIfStatements(mapAccum, statements)
+    {
+        // We want to be in single return form:
+        // [declaration-1, declaration-2, ..., declaration-n, return]
+        //
+        // However, we *allow* intermediate if-gaurded early returns, but we
+        // do so by transforming it into a single return by wrapping everything
+        // after the if-gaurd in an if-function, and return the result of it.
+        //
+        // Code of the form:
+        // [d1, d2, ..., dn, if (test) [s], s1, s2, ..., sn, return]
+        //
+        // Where:
+        // 1. d1, d2, ..., dn are consecutive declarations
+        // 2. if (test) [s] is an if statement that ends in a return.
+        // 3. s1, s2, ..., sn are either declaration or more if-gaurded early
+        //    returns.
+        //
+        // Becomes:
+        // [d1, d2, ..., fIf (test, () => [s], () => [s1, s2, ..., sn, return])]
+
+        // Start by finding the first if-gaurded early return.
+        const firstIf = statements.findIndex(t.isIfStatement);
+
+        // If we have no if statements, it's pretty easy, just handle the
+        // declarations and final return.
+        if (firstIf === -1)
+            return fromDeclarationStatements(mapAccum, statements);
+
+        // If not, then construct the if-function to replace the tail of the
+        // statements with:
+        const { test, consequent } = statements[firstIf];
+        const alternate = statements.slice(firstIf + 1);
+        const returnIf = toReturnIf({ test, consequent, alternate });
+
+        // Construct the revised statement list:
+        const singleReturnForm = [...statements.slice(0, firstIf), returnIf];
+
+        // Apply the same declaration transforms we were already planning to.
+        return fromDeclarationStatements(mapAccum, singleReturnForm);
+    }
+})();
+
+function fromDeclarationStatements(mapAccum, statements)
+{
+    // Now we only need to handle the declarations.
+    const [[returnPair], declarations] = partition(
+        ([, node]) => node.type === "ReturnStatement",
+        statements
+            .flatMap(node => node.type === "VariableDeclaration" ?
+                node.declarations : node)
+            .map(mapAccum));
+    const scope = declarations.reduce(
+        (lhs, rhs) => Scope.concat(lhs, rhs[0]),
+        returnPair[0]);
+    const fCallExpression =
+        fromDeclarations(declarations, returnPair[1].argument);
+
+    return [scope, [t.returnStatement(fCallExpression)]];
+}
+
 function fromDeclarations(declarations, returnExpression)
 {
     const combinedScope = declarations.reduce((lhs, rhs) =>
@@ -30,29 +117,11 @@ function partition(f, list)
 {
     const filtered = [];
     const rejected = [];
-    
+
     for (const item of list)
         (f(item) ? filtered : rejected).push(item);
 
     return [filtered, rejected];
-}
-
-module.exports = function (f, free)
-{
-    const { parseExpression } = require("@babel/parser");
-    const [scope, transformed] = fromAST(parseExpression(`(${f})`));
-
-    const parameters = Object.keys(free || { });
-    const missing = scope.free.subtract(parameters);
-
-    if (missing.size > 0)
-        throw Error("Missing values for " + missing.join(", "));
-
-    const { default: generate } = require("@babel/generator");
-    const code = `return ${generate(transformed).code}`;
-    const args = parameters.map(parameter => free[parameter]);
-
-    return (new Function(...parameters, code))(...args);
 }
 
 const fromAST = (function ()
@@ -62,23 +131,12 @@ const fromAST = (function ()
 
     const toLambdaFormEach = babelMapAccum.fromDefinitions(
     {
-        BlockStatement(mapAccumNode, node)
+        BlockStatement(mapAccum, node)
         {
-            const [[returnPair], declarations] = partition(
-                ([, node]) => node.type === "ReturnStatement",
-                node.body
-                    .flatMap(node => node.type === "VariableDeclaration" ?
-                        node.declarations : node)
-                    .map(mapAccumNode));
-            const scope = declarations.reduce(
-                (lhs, rhs) => Scope.concat(lhs, rhs[0]),
-                returnPair[0]);
-            const fCallExpression =
-                fromDeclarations(declarations, returnPair[1].argument);
-            const lambdaForm = t.blockStatement(
-                [t.returnStatement(fCallExpression)]);
-    
-            return [scope, lambdaForm];
+            const [scope, statements] =
+                fromIfStatements(mapAccum, node.body);
+
+            return [scope, t.BlockStatement(statements)];
         }
     }, transformScope);
 
@@ -89,5 +147,3 @@ const fromAST = (function ()
 })();
 
 module.exports.fromAST = fromAST;
-
-

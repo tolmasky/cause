@@ -4,12 +4,12 @@ const { Dependent, Dependency } = require("./dependent");
 
 module.exports = function (callee, ...arguments)
 {
-    return Dependent.Initial.from({ lifted: false, callee, arguments });
+    return Dependent.from({ lifted: false, callee, arguments });
 }
 
 module.exports.lift = function (callee, ...arguments)
 {
-    return Dependent.Initial.from({ lifted: true, callee, arguments });
+    return Dependent.from({ lifted: true, callee, arguments });
 }
 
 module.exports.success = function (value)
@@ -48,6 +48,9 @@ const operators = Object.entries(
     "&&": (lhs, rhs) => lhs && rhs,
     "||": (lhs, rhs) => lhs || rhs,
     "u(!)": value => !value,
+
+    "if": (condition, consequent, alternate) =>
+        condition ? consequent() : alternate(),
 
     "u(typeof)": value => typeof value,
     "in": (lhs, rhs) => lhs in rhs,

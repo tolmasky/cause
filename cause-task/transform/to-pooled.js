@@ -16,13 +16,19 @@ const has = (({ hasOwnProperty }) =>
     (Object);
 
 
-module.exports = function (symbolOrSymbols, f, free)
+module.exports = function (symbols, f, free)
 {
     const { parseExpression } = require("@babel/parser");
-    const symbols = typeof symbolOrSymbols === "string" ?
-        { [symbolOrSymbols]: true } :
-        Object.fromEntries([...symbolOrSymbols].map(key => [key, true]));
-    const [type, transformed] = fromAST(symbols, parseExpression(`(${f})`));
+    const fExpression = parseExpression(`(${f})`);
+    const name = fExpression.id ? [fExpression.id.name] : [];
+
+    const explicitSymbols = is(string, symbols) ? [symbols] : [...symbols];
+    const implicitSymbols = fExpression.id ? [fExpression.id.name] : [];
+    const symbolEntries =
+        [...explicitSymbols, ...implicitSymbols].map(key => [key, true]);
+    const symbolSet = Object.fromEntries(symbolEntries);
+
+    const [type, transformed] = fromAST(symbolSet, fExpression);
 
     const parameters = Object.keys(free || { });
     // const missing = scope.free.subtract(parameters);
@@ -42,6 +48,10 @@ const Type = union `Type` (
     data `Function` (
         input    => Type,
         output   => Type ) );
+
+Type.NonFunction = union `Type.NonFunction` (
+    Type.Value,
+    Type.State );
 
 Type.returns = function (T)
 {
@@ -65,6 +75,7 @@ function prefix(operator)
 
 function fromAST(symbols, fAST)
 {
+    const { parseExpression } = require("@babel/parser");
     const template = require("@babel/template").expression;
     const pCall = template(`p(%%callee%%, %%arguments%%)`);
     const pSuccess = template(`p.success(%%argument%%)`);
@@ -72,6 +83,9 @@ function fromAST(symbols, fAST)
     const pOperator = (template =>
         operator => template({ operator: t.stringLiteral(operator) }))
         (template(`p[%%operator%%]`));
+    const pIf = template(`p(p["if"], %%test%%, ` +
+        `p.success(() => %%consequent%%), ` +
+        `p.success(() => %%alterate%%))`);
 
     return babelMapAccum(Type, babelMapAccum.fromDefinitions(
     {
@@ -79,13 +93,48 @@ function fromAST(symbols, fAST)
         CallExpression,
         LogicalExpression: BinaryExpression,
 
-        ArrowFunctionExpression(mapAccum, expression)
-        {
-            const [paramsT, params] = mapAccum(expression.params);
-            const [bodyT, body] = mapAccum(expression.body);
-            const type = bodyT === Type.State ? Type.fToState : Type.ValueToValue;
+        FunctionExpression,
+        ArrowFunctionExpression: FunctionExpression,
 
-            return [type, { ...expression, params, body }];
+        ConditionalExpression(mapAccum, expression)
+        {
+            const [consequentT, consequent] = mapAccum(expression.consequent);
+            const [alternateT, alternate] = mapAccum(expression.alternate);
+            const mismatch = consequentT !== alternateT;
+
+            if (mismatch &&
+                (is(Type.Function, consequentT) ||
+                 is(Type.Function, alternateT)))
+                throw Error(
+                    `The following expression is too hard to figure out. ` +
+                    `The consequent returns ${consequentT} but the ` +
+                    `alternate returns ${alternateT}. I can currently ` +
+                    `only handle non-function mismatches.`);
+
+            // If either side returns a State, both must.
+            const returnT = Type.concat(consequentT, alternateT);
+            console.log(returnT);
+            // It's trivial to lift the value sides, just wrap them.
+            const lift = (T, argument) =>
+                returnT === Type.State && T === Type.Value ?
+                    pSuccess({ argument }) :
+                    argument;
+            const newConsequent = lift(consequentT, consequent);
+            const newAlternate = lift(alternateT, alternate);
+
+            // The "consequent" and "alternate" should never be waited on, as
+            // they are actually implicit lambdas that are only evaluated
+            // as a result of the value of "test". As such, if test is not a
+            // State, we should still use an inline conditional expression:
+            const [testT, test] = mapAccum(expression.test);
+
+            if (testT !== Type.State)
+                return [returnT,
+                    t.ConditionalExpression(test, newConsequent, newAlternate)];
+
+            // Since "test" is a State, we need to wait on it:
+            return [returnT,
+                pIf({ test, consequent: newConsequent, alternate: newAlternate })];
         },
 
         ArrayExpression(mapAccum, expression)
@@ -133,6 +182,15 @@ function fromAST(symbols, fAST)
         }
 
     }))(toLambdaForm.fromAST(fAST)[1]);
+
+    function FunctionExpression(mapAccum, expression)
+    {
+        const [paramsT, params] = mapAccum(expression.params);
+        const [bodyT, body] = mapAccum(expression.body);
+        const type = bodyT === Type.State ? Type.fToState : Type.fValueToValue;
+
+        return [type, { ...expression, params, body }];
+    }
 
     function BinaryExpression(mapAccum, expression)
     {
