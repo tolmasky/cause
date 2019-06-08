@@ -11,5 +11,5 @@ module.exports.mkdir = mkdir
 module.exports.mkdirp = (path, options) =>
     mkdir(path, { ...options, recursive: true });
 
-module.exports.write = andReturnPath(fs.write);
+module.exports.write = andReturnPath(fs.writeFile);
 
