@@ -1,4 +1,4 @@
-const { data, union, any, boolean, number, is } = require("@algebraic/type");
+const { data, union, any, boolean, number, is, of } = require("@algebraic/type");
 const { List, Map } = require("@algebraic/collections");
 const update = require("@cause/cause/update");
 const Task = require("./task");
@@ -72,7 +72,7 @@ Dependency.Completed = union `Task.Dependency.Completed` (
     Dependency.Failure );
 
 Dependent.Initial.from = function from({ lifted, callee, arguments })
-{
+{throw Error("NO ONE SHOULD USE ME");
     const dependencies = List(Argument)([callee, ...arguments].map(
         (dependency, index) => Argument({ index: index - 1, dependency })));
     const initial = dependencies.filter(({ dependency }) =>
@@ -83,7 +83,7 @@ Dependent.Initial.from = function from({ lifted, callee, arguments })
     return Dependent.Initial({ lifted, initial, completed });
 }
 
-Dependent.from = function from({ lifted, callee, arguments })
+Dependent.from = function from({ lifted, callee, arguments, shout })
 {
     const dependencies = List(Argument)([callee, ...arguments].map(
         (dependency, index) => Argument({ index: index - 1, dependency })));
@@ -91,9 +91,9 @@ Dependent.from = function from({ lifted, callee, arguments })
         is(Dependency.Initial, dependency));
     const completed = dependencies.filter(({ dependency }) =>
         is(Dependency.Completed, dependency));
-
+//if (shout) { console.log("ARGUMENT COUNT IS " + dependencies.size + " " + completed.size + " " + initial.size + " " + lifted) }
     return initial.size === 0 ?
-        Dependent.Unblocked.from({ lifted, completed }) :
+        Dependent.Running.from({ lifted, completed }) :
         Dependent.Initial({ lifted, initial, completed });
 }
 
@@ -133,12 +133,12 @@ Dependent.Unblocking.update = update
                 { ...dependent, initial, started, completed });
 
         const { lifted } = dependent;
-        const unblocked = Dependent.Unblocked.from({ lifted, completed });
+        const unblocked = Dependent.Running.from({ lifted, completed });
 
         return andEvents(unblocked);
     });
 
-Dependent.Unblocked.from = function ({ lifted, completed })
+Dependent.Running.from = function ({ lifted, completed })
 {
     const successes = completed
         .filter(({ dependency }) =>
@@ -159,10 +159,11 @@ Dependent.Unblocked.from = function ({ lifted, completed })
         .sortBy(({ index }) => index)
         .map(({ dependency }) => dependency.value);
     const value = f(...arguments);
-
+//console.log(f+" -> " + lifted + " " + value);
+//console.log("CHILD: " + of(value));
     return  lifted ? Dependent.Success({ value }) :
             is(Dependency.Success, value) ? Dependent.Success({ ...value }) :
-            Dependent.Unblocked({ task: value });
+            Dependent.Running({ task: value });
 }
 
 Dependent.Unblocked.update = update
