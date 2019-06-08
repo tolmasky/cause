@@ -36,7 +36,7 @@ module.exports = function (symbols, f, free)
 //    if (missing.size > 0)
 //        throw Error("Missing values for " + missing.join(", "));
 
-    const code = `return ${generate(transformed).code}`;console.log(code);
+    const code = `return ${generate(transformed).code}`;
     const args = parameters.map(parameter => free[parameter]);
 
     return (new Function("p", ...parameters, code))(wrap, ...args);
@@ -63,9 +63,12 @@ Type.fToState = Type.Function({ input: Type.Value, output: Type.State });
 
 Type.identity = Type.Value;
 Type.concat = (lhs, rhs) =>
+    lhs === Type.State ? Type.State :
+    rhs === Type.State ? Type.State :
+    Type.Value;/*
     lhs === Type.Value ? rhs :
     rhs === Type.Value ? lhs :
-    Type.State;
+    Type.State;*/
 
 
 function prefix(operator)
@@ -113,7 +116,7 @@ function fromAST(symbols, fAST)
 
             // If either side returns a State, both must.
             const returnT = Type.concat(consequentT, alternateT);
-            console.log(returnT);
+
             // It's trivial to lift the value sides, just wrap them.
             const lift = (T, argument) =>
                 returnT === Type.State && T === Type.Value ?

@@ -22,13 +22,13 @@ async function show(f, ...args)
     };
     const t = Object.fromEntries(
         Object.entries(v).map(([key, v]) => [key.replace(/^v/, "t"), v_to_t(v)]));
-    
+
     v.v_t_add = () => t.t_add;
     t.t_t_add = v_to_t(v.v_t_add);
-    
+
     t.t_spawn = spawn;
     t.t_map = map;
-    
+
 console.log(t.t_t_add());
     const free = { ...v, ...t, console };
     const symbols = Object.keys(t);
@@ -47,9 +47,9 @@ console.log(task);
 
 (async function (...tests)
 {
-    await show(tests[14]);
-})( 
-/* 0*/ () => 1, /* broken - correct? */ 
+    await show(tests[15]);
+})(
+/* 0*/ () => 1, /* broken - correct? */
 
 /* 1*/ () => t_num(1),
 
@@ -77,13 +77,20 @@ console.log(task);
 
 /*13*/ () => { if (false) return t_id(1); return 12; },
 
-/*14*/ () => { 
+/*14*/ () => {
     const temporary = (function ()
     {
         if (false) return t_id(1); return 12;
     })();
 
     return temporary + 2;
+},
+
+/*14*/ () => {
+    const items = t_map(t_id, [1,2,3,4]);
+    //const results = console.log("RESULTS: " + items);
+
+    return items;
 }
 
 
