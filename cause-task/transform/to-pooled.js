@@ -9,7 +9,6 @@ const { data, number, union, string, is } = require("@algebraic/type");
 const { List, Map } = require("@algebraic/collections");
 const Optional = require("@algebraic/type/optional");
 const { default: generate } = require("@babel/generator");
-const Asynchronous = require("@cause/asynchronous");
 const wrap = require("@cause/task/wrap");
 const has = (({ hasOwnProperty }) =>
     (key, object) => hasOwnProperty.call(object, key))

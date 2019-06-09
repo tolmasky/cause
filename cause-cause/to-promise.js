@@ -21,7 +21,7 @@ module.exports = function toPromise(T, root)
 
         const deferredPush = event => setImmediate(function ()
         {
-            const [updated, events] = update(mutableManager, event);console.log(events);
+            const [updated, events] = update(mutableManager, event);
             const finished = events.reduce((finished, event) =>
                 finished ||
                     void(channel.emit(event)) ||
@@ -31,7 +31,11 @@ module.exports = function toPromise(T, root)
             // THE ONLY MUTATION!
             mutableManager = updated;
 
-// console.log("MANAGER IS NOW: " + mutableManager.root);//toString(0)(mutableManager.root));
+//if (global.should_show_up)
+{
+//    console.log("MANAGER IS NOW: " + mutableManager.root);//toString(0)(mutableManager.root));
+//    global.should_show_up = false;
+}
             if (finished)
                 is(Dependency.Success, finished) ?
                     resolve(finished.value) : reject(finished.error);

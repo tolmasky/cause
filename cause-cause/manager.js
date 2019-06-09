@@ -7,8 +7,6 @@ const update = require("./update");
 const getType = record => Object.getPrototypeOf(record).constructor;
 const NoDescendentIOs = [List(Entry)(), Map(number, Function)()];
 
-console.log(parameterized.is(List, List(number)));
-
 const Route = data `Route` (
     UUID    => number,
     event   => Object );

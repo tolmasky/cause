@@ -68,7 +68,7 @@ T = Any;
 }
 
 module.exports = Asynchronous;
-console.log(Asynchronous(Any).Success);
+
 const Dependent = union `Dependent` (
     data `Waiting` (
         action       => Function,

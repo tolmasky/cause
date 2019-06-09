@@ -4,8 +4,7 @@ const toLambdaForm = require("@cause/task/transform/to-lambda-form");
 const toPromise = require("@cause/cause/to-promise");
 const spawn = require("@cause/task/spawn");
 const map = require("@cause/task/map");
-
-const returnNumber = number => () => fromAsyncCall(async () => (await 0, number));
+const { write } = require("@cause/task/fs");
 
 async function show(f, ...args)
 {
@@ -28,6 +27,7 @@ async function show(f, ...args)
 
     t.t_spawn = spawn;
     t.t_map = map;
+    t.t_write = write;
 
 console.log(t.t_t_add());
     const free = { ...v, ...t, console };
@@ -47,7 +47,7 @@ console.log(task);
 
 (async function (...tests)
 {
-    await show(tests[15]);
+    await show(tests[17], 3);
 })(
 /* 0*/ () => 1, /* broken - correct? */
 
@@ -86,11 +86,35 @@ console.log(task);
     return temporary + 2;
 },
 
-/*14*/ () => {
-    const items = t_map(t_id, [1,2,3,4]);
+/*15*/ () => {
+    const items = t_map(t_id, [1,2,3,9]);
     //const results = console.log("RESULTS: " + items);
 
     return items;
+},
+
+/*16*/ function x(recurse)
+{
+    if (recurse <= 0)
+        return t_id(1);
+
+    const next = t_id(recurse - 1);
+    const items = t_map(x, [next, next, next, next]);
+    
+    if (recurse < 3)
+        return t_id(items);
+
+    const path = t_write(`./${items.join("-")}.txt`, "hi", "utf-8");
+    const path2 = t_write(`./${path.length}.txt`, path, "utf-8");
+
+    return t_id(path2);
+},
+
+/*17*/ (x) => {
+    if (false)
+        return t_id(3);
+
+    return 4;
 }
 
 
