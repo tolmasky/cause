@@ -3,6 +3,7 @@ const { Set } = require("@algebraic/collections");
 
 const t = require("@babel/types");
 const Scope = require("./scope");
+const fail = error => { throw SyntaxError(error); };
 
 
 module.exports = function (f, free)
@@ -28,8 +29,8 @@ const fromIfStatements = (function ()
     const template = require("@babel/template").default;
     const toReturnIf = template(
         `return (%%test%% ? ` +
-        `(() => { %%consequent%% })() : ` +
-        `(() => { %%alternate%% })())`);
+        `(() => %%consequent%%)() : ` +
+        `(() => %%alternate%%)())`);
 
     return function fromIfStatements(mapAccum, statements)
     {
@@ -62,8 +63,19 @@ const fromIfStatements = (function ()
 
         // If not, then construct the if-function to replace the tail of the
         // statements with:
-        const { test, consequent } = statements[firstIf];
-        const alternate = statements.slice(firstIf + 1);
+        const { test, consequent: consequentStatement } = statements[firstIf];
+        // The consequent is now the body of an arrow function, so it has to be
+        // an expression or block statement. We expect to only have declarations
+        // and return statements, so the special case of a single return
+        // statement can folded into just it's argument.
+        const consequent =
+            t.isReturnStatement(consequentStatement) ?
+                consequentStatement.argument :
+            t.isBlockStatement(consequentStatement) ?
+                consequentStatement :
+                fail("Only const declarations and return statements allowed.");
+
+        const alternate = t.blockStatement(statements.slice(firstIf + 1));
         const returnIf = toReturnIf({ test, consequent, alternate });
 
         // Construct the revised statement list:
