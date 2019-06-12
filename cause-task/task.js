@@ -1,6 +1,7 @@
 const { data, union, is, any } = require("@algebraic/type");
 const Cause = require("@cause/cause");
 const update = require("@cause/cause/update");
+const inspect = Symbol.for("nodejs.util.inspect.custom");
 
 
 const Task = union `Task` (
@@ -32,6 +33,11 @@ Task.Running.update = update
     .on(Task.Failure, (waiting, event) =>
         [event, [event]]);
 
+Task.fromAsync = function (fAsync)
+{
+    return (...args) => Task.fromAsyncCall(fAsync, ...args);
+}
+
 Task.fromAsyncCall = function (fAsync, ...args)
 {
     const start = function start (push)
@@ -42,6 +48,8 @@ Task.fromAsyncCall = function (fAsync, ...args)
 
         push(Started);
     };
+    start.toString = function () { return (fAsync+"").substr(0,100); }
+    start[inspect] = function () { return (fAsync+"").substr(0,100); }
     const cause = Cause(any)({ start });
 
     return Task.Initial({ cause });

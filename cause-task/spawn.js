@@ -20,6 +20,8 @@ module.exports.stdout = toPooled("spawn", function (...args)
     return spawn(...args).stdout;
 }, { spawn });
 
+module.exports.lastline = output => output.match(/([^\n]*)\n$/)[1];
+
 function spawn(command, args = [], options = { })
 {
     return fromAsyncCall(function ()
