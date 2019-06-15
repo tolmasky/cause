@@ -71,18 +71,6 @@ Dependency.Completed = union `Task.Dependency.Completed` (
     Dependency.Success,
     Dependency.Failure );
 
-Dependent.Initial.from = function from({ lifted, callee, arguments })
-{throw Error("NO ONE SHOULD USE ME");
-    const dependencies = List(Argument)([callee, ...arguments].map(
-        (dependency, index) => Argument({ index: index - 1, dependency })));
-    const initial = dependencies.filter(({ dependency }) =>
-        is(Dependency.Initial, dependency));
-    const completed = dependencies.filter(({ dependency }) =>
-        is(Dependency.Completed, dependency));
-
-    return Dependent.Initial({ lifted, initial, completed });
-}
-
 Dependent.from = function from({ lifted, callee, arguments, shout })
 {
     const dependencies = List(Argument)([callee, ...arguments].map(
@@ -91,7 +79,7 @@ Dependent.from = function from({ lifted, callee, arguments, shout })
         is(Dependency.Initial, dependency));
     const completed = dependencies.filter(({ dependency }) =>
         is(Dependency.Completed, dependency));
-//if (shout) { console.log("ARGUMENT COUNT IS " + dependencies.size + " " + completed.size + " " + initial.size + " " + lifted) }
+
     return initial.size === 0 ?
         Dependent.Running.from({ lifted, completed }) :
         Dependent.Initial({ lifted, initial, completed });
@@ -159,8 +147,7 @@ Dependent.Running.from = function ({ lifted, completed })
         .sortBy(({ index }) => index)
         .map(({ dependency }) => dependency.value);
     const value = f(...arguments);
-//console.log(f+" -> " + lifted + " " + value);
-//console.log("CHILD: " + of(value));
+
     return  lifted ? Dependent.Success({ value }) :
             is(Dependency.Success, value) ? Dependent.Success({ ...value }) :
             Dependent.Running({ task: value });

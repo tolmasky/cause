@@ -87,7 +87,7 @@ function fromAST(symbols, fAST)
         (template(`p[%%operator%%]`));
     const pIf = template(`p(p["if"], %%test%%, ` +
         `p.success(() => %%consequent%%), ` +
-        `p.success(() => %%alterate%%))`);
+        `p.success(() => %%alternate%%))`);
 
     return babelMapAccum(Type, babelMapAccum.fromDefinitions(
     {
