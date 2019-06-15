@@ -21,11 +21,8 @@ const Dependent  = union `Task.Dependent` (
         completed       => [List(Argument), List(Argument)()] ),
 
     // FIXME: we need this or because it gets changed from underneath us!
-    data `Unblocked` (
-        task            => union `or` ( Dependency ) ),
-
     data `Running` (
-        task            => union `or2` ( Dependency ) ),
+        task            => Dependency ),
 
     data `Success` (
         value           => any ),
@@ -41,7 +38,6 @@ module.exports = Dependent;
 Dependent.Dependent = Dependent;
 
 Dependent.Progressed = union `Task.Dependent.Progressed` (
-    Dependent.Unblocked,
     Dependent.Running );
 
 const Dependency = union `Task.Dependency` (
@@ -121,9 +117,8 @@ Dependent.Unblocking.update = update
                 { ...dependent, initial, started, completed });
 
         const { lifted } = dependent;
-        const unblocked = Dependent.Running.from({ lifted, completed });
 
-        return andEvents(unblocked);
+        return andEvents(Dependent.Running.from({ lifted, completed }));
     });
 
 Dependent.Running.from = function ({ lifted, completed })
@@ -152,10 +147,6 @@ Dependent.Running.from = function ({ lifted, completed })
             is(Dependency.Success, value) ? Dependent.Success({ ...value }) :
             Dependent.Running({ task: value });
 }
-
-Dependent.Unblocked.update = update
-    .on(Dependency.Started, (unblocked, event) =>
-        andEvents(Dependent.Running({ ...unblocked }) ) )
 
 Dependent.Running.update = update
     .on(Dependency.Success, (running, event) =>
