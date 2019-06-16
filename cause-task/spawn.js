@@ -16,9 +16,9 @@ const ExitedWithError = data `Task.Spawn.ExitedWithError` (
 
 module.exports = spawn;
 
-module.exports.stdout = toPooled("spawn", function (...args)
+module.exports.stdout = toPooled(function (...args)
 {
-    return spawn(...args).stdout;
+    return δ(spawn(...args)).stdout;
 }, { spawn });
 
 module.exports.lastline = output => output.match(/([^\n]*)\n$/)[1];

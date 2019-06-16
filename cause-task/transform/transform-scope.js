@@ -9,9 +9,7 @@ module.exports = require("@climb/babel-map-accum").fromDefinitions(
 {
     Identifier(mapAccumNode, node)
     {
-        const name = node.name.startsWith("δ") ? node.name.slice(1) : node.name;
-
-        return [Scope.fromFree(name), node];
+        return [Scope.fromFree(node.name), node];
     },
 
     VariableDeclarator(mapAccumNode, node)

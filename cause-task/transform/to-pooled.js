@@ -14,6 +14,8 @@ const has = (({ hasOwnProperty }) =>
     (key, object) => hasOwnProperty.call(object, key))
     (Object);
 
+const δ = require("@cause/task/δ");
+
 
 module.exports = function (...args)
 {
@@ -39,7 +41,7 @@ module.exports = function (...args)
     const code = `return ${generate(transformed).code}`;
     const values = parameters.map(parameter => free[parameter]);
 
-    return (new Function("p", ...parameters, code))(wrap, ...values);
+    return (new Function("p", ...parameters, "δ", code))(wrap, ...values, δ);
 }
 
 const Type = union `Type` (
@@ -179,15 +181,9 @@ function fromAST(symbols, fAST)
 
         Identifier(mapAccum, identifier)
         {
-            const { name } = identifier;
-            const isImplicitlyPooled = name.startsWith("δ")
-//                name.startsWith("𝛅 𝚫 φ Δ") || φ(command)
-
-            return  name.startsWith("δ") ?
-                        [Type.fToState, t.identifier(name.slice(1))] :
-                    has(name, symbols) ?
-                        [Type.fToState, identifier] :
-                        [Type.Value, identifier];
+            return identifier.name === "δ" ?//has(identifier.name, symbols) ?
+                [Type.fToState, identifier] :
+                [Type.Value, identifier];
         }
 
     }))(toLambdaForm.fromAST(fAST)[1]);

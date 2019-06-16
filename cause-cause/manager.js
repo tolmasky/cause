@@ -1,6 +1,7 @@
 const { data, parameterized, number, ftype, is, getKind } = require("@algebraic/type");
 const { List, Map } = require("@algebraic/collections");
 const Cause = require("@cause/cause");
+const Task = require("@cause/task");
 
 const KeyPath = require("./key-path");
 const update = require("./update");
@@ -171,6 +172,9 @@ function getComputedDescendentIOs(node)
 
 function canContainIOs(node)
 {
+    if (is(Task.Success, node))
+        return;
+
     if (!node || typeof node !== "object")
         return false;
 
