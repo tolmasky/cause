@@ -15,8 +15,9 @@ const has = (({ hasOwnProperty }) =>
     (Object);
 
 
-module.exports = function (symbols, f, free)
+module.exports = function (...args)
 {
+    const [symbols, f, free] = args.length < 3 ? [[], ...args] : args;
     const { parseExpression } = require("@babel/parser");
     const fExpression = parseExpression(`(${f})`);
     const name = fExpression.id ? [fExpression.id.name] : [];
@@ -36,9 +37,9 @@ module.exports = function (symbols, f, free)
 //        throw Error("Missing values for " + missing.join(", "));
 
     const code = `return ${generate(transformed).code}`;
-    const args = parameters.map(parameter => free[parameter]);
+    const values = parameters.map(parameter => free[parameter]);
 
-    return (new Function("p", ...parameters, code))(wrap, ...args);
+    return (new Function("p", ...parameters, code))(wrap, ...values);
 }
 
 const Type = union `Type` (
@@ -178,9 +179,15 @@ function fromAST(symbols, fAST)
 
         Identifier(mapAccum, identifier)
         {
-            return has(identifier.name, symbols) ?
-                [Type.fToState, identifier] :
-                [Type.Value, identifier];
+            const { name } = identifier;
+            const isImplicitlyPooled = name.startsWith("δ")
+//                name.startsWith("𝛅 𝚫 φ Δ") || φ(command)
+
+            return  name.startsWith("δ") ?
+                        [Type.fToState, t.identifier(name.slice(1))] :
+                    has(name, symbols) ?
+                        [Type.fToState, identifier] :
+                        [Type.Value, identifier];
         }
 
     }))(toLambdaForm.fromAST(fAST)[1]);

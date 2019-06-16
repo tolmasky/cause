@@ -9,7 +9,9 @@ module.exports = require("@climb/babel-map-accum").fromDefinitions(
 {
     Identifier(mapAccumNode, node)
     {
-        return [Scope.fromFree(node.name), node];
+        const name = node.name.startsWith("δ") ? node.name.slice(1) : node.name;
+
+        return [Scope.fromFree(name), node];
     },
 
     VariableDeclarator(mapAccumNode, node)
@@ -25,7 +27,7 @@ module.exports = require("@climb/babel-map-accum").fromDefinitions(
     FunctionDeclaration: fromFunction(false),
     FunctionExpression: fromFunction(true),
     ArrowFunctionExpression: fromFunction(true),
- 
+
     BlockStatement(mapAccumNode, node)
     {
         const [bodyScope, body] = mapAccumNode(node.body);
@@ -56,7 +58,7 @@ function fromFunction(isExpression)
         return [scope, mapped];
     }
 }
-    
+
 function fromPattern(mapAccumNode, pattern)
 {
     if (!pattern)

@@ -3,6 +3,7 @@ const { fromAsyncCall } = require("./task");
 const { spawn: spawnAsync } = require("child_process");
 const { Readable } = require("stream");
 const toPooled = require("./transform/to-pooled");
+const { hasOwnProperty } = Object;
 
 
 const Result = data `Task.Spawn.Result` (
@@ -33,6 +34,8 @@ function spawn(command, args = [], options = { })
             const modifiedOptions = hasReadableStdInStream ?
                 { ...options, stdio: ["pipe", ...stdio.slice(1)] } :
                 options;
+            const rejectOnError = hasOwnProperty.call(options, "rejectOnError") ?
+                !!options.rejectOnError : true;
 
             const process = spawnAsync(command, args, modifiedOptions);
 
@@ -47,7 +50,7 @@ function spawn(command, args = [], options = { })
 
             process.on("error", error => reject(error));
             process.on("exit", exitCode =>
-                exitCode !== 0 ?
+                exitCode !== 0 && rejectOnError ?
                     reject(ExitedWithError({ ...output, exitCode })) :
                     resolve(Result({ ...output, exitCode })));
 
