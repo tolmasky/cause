@@ -9,15 +9,11 @@ const Argument = data `Argument` (
     dependency  => Dependency );
 
 const Dependent  = union `Task.Dependent` (
-    data `Initial` (
-        lifted          => boolean,
-        initial         => [List(Argument), List(Argument)()],
-        completed       => [List(Argument), List(Argument)()] ),
 
-    data `Unblocking` (
+    data `Blocked` (
         lifted          => boolean,
-        initial         => [List(Argument), List(Argument)()],
-        started         => [List(Argument), List(Argument)()],
+        blocked         => [List(Argument), List(Argument)()],
+        running         => [List(Argument), List(Argument)()],
         completed       => [List(Argument), List(Argument)()] ),
 
     // FIXME: we need this or because it gets changed from underneath us!
@@ -46,13 +42,13 @@ const Dependency = union `Task.Dependency` (
 
 Dependent.Dependency = Dependency;
 
-Dependency.Started = union `Task.Dependency.Started` (
-    Dependent.Unblocking,
-    Task.Running )
+Dependency.Blocked = union `Task.Dependency.Blocked` (
+    Dependent.Blocked,
+    Task.Initial )
 
-Dependency.Initial = union `Task.Dependency.Initial` (
-    union `one` ( Task.Initial ),
-    union `two` ( Dependent.Initial ) );
+Dependency.Running = union `Task.Dependency.Running` (
+    union `one` ( Task.Running ),
+    union `two` ( Dependent.Running ) );
 
 Dependency.Success = union `Task.Dependency.Success` (
     union `one` ( Task.Success ),
@@ -67,62 +63,48 @@ Dependency.Completed = union `Task.Dependency.Completed` (
     Dependency.Success,
     Dependency.Failure );
 
-Dependent.from = function from({ lifted, callee, arguments, shout })
+Dependent.wrap = function from({ lifted, callee, arguments })
 {
     const dependencies = List(Argument)([callee, ...arguments].map(
         (dependency, index) => Argument({ index: index - 1, dependency })));
-    const initial = dependencies.filter(({ dependency }) =>
-        is(Dependency.Initial, dependency));
+    const blocked = dependencies.filter(({ dependency }) =>
+        is(Dependency.Blocked, dependency));
+    const running = dependencies.filter(({ dependency }) =>
+        is(Dependency.Running, dependency));
     const completed = dependencies.filter(({ dependency }) =>
         is(Dependency.Completed, dependency));
 
-    return initial.size === 0 ?
-        Dependent.Running.from({ lifted, completed }) :
-        Dependent.Initial({ lifted, initial, completed });
+    return Dependent.from({ lifted, blocked, running, completed });
 }
 
-Dependent.Initial.update = update
-    .on(Dependency.Started, (dependent, event, [_, index]) =>
-        andEvents(Dependent.Unblocking(
+Dependent.Blocked.update = update
+    .on(Dependency.Running, (dependent, event, [_, index]) =>
+        Dependent.Blocked(
         {
             ...dependent,
-            initial: dependent.initial.remove(index),
-            started: List(Dependency.Started)
-                ([dependent.initial.get(index)]),
-            completed: dependent.completed
-        }) ) );
-
-Dependent.Unblocking.update = update
-    .on(Dependency.Started, (dependent, event, [_, index]) =>
-        Dependent.Unblocking(
-        {
-            ...dependent,
-            started: dependent.started
-                .push(dependent.initial.get(index)),
-            initial: dependent.initial.remove(index)
+            running: dependent.running
+                .push(dependent.blocked.get(index)),
+            blocked: dependent.blocked.remove(index)
         }) )
 
-    // We don't care about this kind of progress.
-    .on(Dependent.Progressed, (dependent, event) => [dependent, []])
-
-    .on(Dependency.Completed, function (dependent, event, [_, index])
+    .on(Dependency.Completed, function (dependent, event, [previous, index])
     {
-        const initial = dependent.initial;
-        const started = dependent.started.remove(index);
-        const completed = dependent.completed
-            .push(dependent.started.get(index));
+        const updated = Dependent.from(
+        {
+            ...dependent,
+            [previous]: dependent[previous].remove(index),
+            completed: dependent.completed
+                .push(dependent[previous].get(index))
+        });
 
-        if (started.size > 0 || initial.size > 0)
-            return Dependent.Unblocking(
-                { ...dependent, initial, started, completed });
-
-        const { lifted } = dependent;
-
-        return andEvents(Dependent.Running.from({ lifted, completed }));
+        return is(Dependent.Blocked, updated) ? updated : andEvents(updated);
     });
 
-Dependent.Running.from = function ({ lifted, completed })
+Dependent.from = function({ lifted = false, blocked, running, completed })
 {
+    if (blocked.size > 0 || running.size > 0)
+        return Dependent.Blocked({ lifted, blocked, running, completed });
+
     const successes = completed
         .filter(({ dependency }) =>
             is(Dependency.Success, dependency));

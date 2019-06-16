@@ -12,5 +12,5 @@ module.exports = function map(tf, list)
     const typecasted =  (...args) => list.map((_, index) => args[index]);
     const callee = Task.Success({ value: typecasted });
 
-    return Dependent.from({ lifted, callee, arguments });
+    return Dependent.wrap({ lifted, callee, arguments });
 }

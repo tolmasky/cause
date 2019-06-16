@@ -28,8 +28,35 @@ async function show(f, ...args)
     t.t_spawn = spawn;
     t.t_map = map;
     t.t_write = write;
+    t.t_if = toPooled(["t_id"], condition =>
+    {
+        if (t_id(condition))
+            return t_id(true);
 
-console.log(t.t_t_add());
+        return false;
+    }, { t_id: t.t_id });
+    t.t_mapper = toPooled(["t_id", "t_map"], items =>
+    {
+        if (items.length)
+        {
+            const o = console.log("here!");
+
+            return t_map(t_id, items);
+        }
+        const i = console.log("a");
+
+        return items;
+    }, t);
+    t.t_earlyReturn = toPooled("t_id", () =>
+    {
+        if (true)
+            return 17;
+
+        const setup = t_id(10);
+
+        return setup + 1;
+    }, t);
+
     const free = { ...v, ...t, console };
     const symbols = Object.keys(t);
 
@@ -47,7 +74,7 @@ console.log(task);
 
 (async function (...tests)
 {
-    await show(tests[17], 3);
+    await show(tests[21], 3);
 })(
 /* 0*/ () => 1, /* broken - correct? */
 
@@ -100,7 +127,7 @@ console.log(task);
 
     const next = t_id(recurse - 1);
     const items = t_map(x, [next, next, next, next]);
-    
+
     if (recurse < 3)
         return t_id(items);
 
@@ -115,8 +142,59 @@ console.log(task);
         return t_id(3);
 
     return 4;
-}
+},
 
+/*18*/ (x) => {
+    const inbetween = t_mapper([0, 1, 0, 1]);
+    const results = t_map(t_if, inbetween);
+    const tt = console.log(results);
+    const addition = t_id(1) + t_id(2);
+
+    return addition;
+},
+
+/*19*/ (x) => {
+    const result = t_map(function (x)
+    {
+        if (x < 10)
+            return 10;
+
+        const first = t_id(x);
+        const second = t_id(1);
+        const y = t_map(function() { if (true) return t_id(1); return 9; }, [1,2,3])
+
+        return first + second;// + y[0];
+    }, [1, 10, 10, 10]);
+
+    return result;
+},
+
+/*20*/ (x) => {
+    const setup = t_id(10);
+    const result = t_map(function (x)
+    {
+        if (x < 10)
+            return 10;
+
+        const first = t_id(x);
+        const second = t_id(1);
+        const y = t_map(function() { if (true) return t_id(1); return 9; }, [1,2,3])
+
+        return first + second;// + y[0];
+    }, []);
+    const length = setup + t_id(result.length) + 1;
+
+    return length;
+},
+
+
+/*20*/ () => {
+
+    const x = t_earlyReturn(20);
+
+    return x;
+//    return t_map(() => t_earlyReturn(20), [1,2,3,4]);
+}
 
 )
 

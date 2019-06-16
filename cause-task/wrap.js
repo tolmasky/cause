@@ -4,12 +4,12 @@ const { Dependent, Dependency } = require("./dependent");
 
 module.exports = function (callee, ...arguments)
 {
-    return Dependent.from({ lifted: false, callee, arguments });
+    return Dependent.wrap({ lifted: false, callee, arguments });
 }
 
 module.exports.lift = function (callee, ...arguments)
 {
-    return Dependent.from({ lifted: true, callee, arguments });
+    return Dependent.wrap({ lifted: true, callee, arguments });
 }
 
 module.exports.success = function (value)
