@@ -1,4 +1,4 @@
-const { fromAST } = require("./to-pooled");
+const { fromAST } = require("./to-delta-form");
 
 
 module.exports = function plugin({ types: t })
