@@ -44,6 +44,8 @@ module.exports = function (...args)
     return (new Function("p", ...parameters, "δ", code))(wrap, ...values, δ);
 }
 
+module.exports.fromAST = fromAST;
+
 const Type = union `Type` (
     data `Value` (),
     data `State` (),
@@ -82,15 +84,14 @@ function fromAST(symbols, fAST)
 {
     const { parseExpression } = require("@babel/parser");
     const template = require("@babel/template").expression;
-    const pCall = template(`p(%%callee%%, %%arguments%%)`);
-    const pSuccess = template(`p.success(%%argument%%)`);
-    const pLift = template(`p.lift(%%callee%%, %%arguments%%)`);
+    const pSuccess = template(`δ.success(%%argument%%)`);
+    const pDepend = template(`δ.depend(%%lifted%%, %%callee%%, %%arguments%%)`);
     const pOperator = (template =>
         operator => template({ operator: t.stringLiteral(operator) }))
-        (template(`p[%%operator%%]`));
-    const pIf = template(`p(p["if"], %%test%%, ` +
-        `p.success(() => %%consequent%%), ` +
-        `p.success(() => %%alternate%%))`);
+        (template(`δ.operators[%%operator%%]`));
+    const pIf = template(`δ.depend(false, δ["if"], %%test%%, ` +
+        `δ.success(() => %%consequent%%), ` +
+        `δ.success(() => %%alternate%%))`);
 
     return babelMapAccum(Type, babelMapAccum.fromDefinitions(
     {
@@ -207,9 +208,9 @@ function fromAST(symbols, fAST)
         if (returnT === Type.Value)
             return [Type.Value, expression];
 
-        const [_, left, right] = asCallExpression.arguments;
+        const [lifted, _, left, right] = asCallExpression.arguments;
         const operator = pOperator(expression.operator);
-        const pArguments = [operator, left, right];
+        const pArguments = [lifted, operator, left, right];
 
         return [returnT, { ...asCallExpression, arguments: pArguments }];
     }
@@ -230,10 +231,10 @@ function fromAST(symbols, fAST)
             const arguments = argumentPairs.map(
                 ([argumentT, argument]) => is (Type.State, argumentT) ?
                     argument : pSuccess({ argument }));
+            const lifted = t.booleanLiteral(calleeT !== Type.fToState);
+            const pCall = pDepend({ lifted, callee: wrappedCallee, arguments });
 
-            return calleeT === Type.fToState ?
-                [Type.State, pCall({ callee: wrappedCallee, arguments })] :
-                [Type.State, pLift({ callee: wrappedCallee, arguments })];
+            return [Type.State, pCall];
         }
 
         const arguments = argumentPairs.map(([, argument]) => argument);

@@ -2,7 +2,6 @@ const { data, number, string } = require("@algebraic/type");
 const { fromAsyncCall } = require("./task");
 const { spawn: spawnAsync } = require("child_process");
 const { Readable } = require("stream");
-const toPooled = require("./transform/to-pooled");
 const { hasOwnProperty } = Object;
 
 
@@ -16,10 +15,10 @@ const ExitedWithError = data `Task.Spawn.ExitedWithError` (
 
 module.exports = spawn;
 
-module.exports.stdout = toPooled(function (...args)
+module.exports.stdout = function (...args)
 {
     return δ(spawn(...args)).stdout;
-}, { spawn });
+}
 
 module.exports.lastline = output => output.match(/([^\n]*)\n$/)[1];
 

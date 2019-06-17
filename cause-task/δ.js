@@ -27,3 +27,59 @@ module.exports = function δ(task)
 
     return Dependent.wrap({ lifted, callee, arguments });
 }
+
+module.exports.depend = function (lifted, callee, ...arguments)
+{
+    return Dependent.wrap({ lifted, callee, arguments });
+}
+
+module.exports.success = function (value)
+{
+    return Task.Success({ value });
+}
+
+module.exports.operators = Object.fromEntries(Object.entries(
+{
+    "+": (lhs, rhs) => lhs + rhs,
+    "-": (lhs, rhs) => lhs - rhs,
+    "*": (lhs, rhs) => lhs * rhs,
+    "/": (lhs, rhs) => lhs / rhs,
+    "%": (lhs, rhs) => lhs / rhs,
+    "**": (lhs, rhs) => lhs ** rhs,
+    "u(-)": value => -value,
+    "u(+)": value => +value,
+
+    "&": (lhs, rhs) => lhs & rhs,
+    "|": (lhs, rhs) => lhs | rhs,
+    "^": (lhs, rhs) => lhs ^ rhs,
+    "<<": (lhs, rhs) => lhs << rhs,
+    ">>": (lhs, rhs) => lhs >> rhs,
+    ">>>": (lhs, rhs) => lhs >> rhs,
+    "u(~)": value => ~value,
+
+    "==": (lhs, rhs) => lhs == rhs,
+    "===": (lhs, rhs) => lhs === rhs,
+    "!=": (lhs, rhs) => lhs != rhs,
+    "!==": (lhs, rhs) => lhs !== rhs,
+    ">": (lhs, rhs) => lhs > rhs,
+    ">=": (lhs, rhs) => lhs >= rhs,
+    "<": (lhs, rhs) => lhs < rhs,
+    "<=": (lhs, rhs) => lhs <= rhs,
+
+    "&&": (lhs, rhs) => lhs && rhs,
+    "||": (lhs, rhs) => lhs || rhs,
+    "u(!)": value => !value,
+
+    "if": (condition, consequent, alternate) =>
+        condition ? consequent() : alternate(),
+
+    "u(typeof)": value => typeof value,
+    "in": (lhs, rhs) => lhs in rhs,
+    "instancoef": (lhs, rhs) => lhs instanceof rhs,
+
+    ".": (lhs, rhs) => (value =>
+        typeof value === "function" ?
+            value.bind(lhs) : value)(lhs[rhs]),
+
+    "=([])": (...args) => args
+}).map(([operator, f]) => [operator, Task.Success({ value: f })]));
