@@ -1,5 +1,5 @@
 const { fromAsyncCall } = require("@cause/task");
-const toPooled = require("@cause/task/transform/to-pooled");
+const toDeltaForm = require("@cause/task/transform/to-delta-form");
 const toLambdaForm = require("@cause/task/transform/to-lambda-form");
 const toPromise = require("@cause/cause/to-promise");
 const spawn = require("@cause/task/spawn");
@@ -28,14 +28,14 @@ async function show(f, ...args)
     t.t_spawn = spawn;
     t.t_map = map;
     t.t_write = write;
-    t.t_if = toPooled(["t_id"], condition =>
+    t.t_if = toDeltaForm(["t_id"], condition =>
     {
         if (t_id(condition))
             return t_id(true);
 
         return false;
     }, { t_id: t.t_id });
-    t.t_mapper = toPooled(["t_id", "t_map"], items =>
+    t.t_mapper = toDeltaForm(["t_id", "t_map"], items =>
     {
         if (items.length)
         {
@@ -47,7 +47,7 @@ async function show(f, ...args)
 
         return items;
     }, t);
-    t.t_earlyReturn = toPooled("t_id", () =>
+    t.t_earlyReturn = toDeltaForm("t_id", () =>
     {
         if (true)
             return 17;
@@ -62,7 +62,7 @@ async function show(f, ...args)
 
     console.log("Original " + f);
 
-    const fTask = toPooled(symbols, f, free);
+    const fTask = toDeltaForm(symbols, f, free);
 
     console.log("Lambda Form: " + toLambdaForm(f, free));
     console.log("Task Form: " + fTask);
@@ -199,5 +199,64 @@ console.log(task);
 )
 
 
+(async function ()
+{
+    const test = require("@cause/task").fromAsync(async () => (await 0, true));
+    console.log(require("@cause/task/δ").operators["if"]);
+    const f = function f()
+    {
+        const r = δ[test]();
+        if (r)
+            return 5;
 
+        return 6;
+    }
+    const f2 = function f2()
+    {
+        if (δ[test]())
+            return 5;
 
+        return 6;
+    }
+    const f3 = function f3()
+    {
+        const r = δ[test]();
+        if (r)
+            return δ[test]();
+
+        return 6;
+    }
+    const f4 = function f4()
+    {
+        if (δ[test]())
+            return δ[test]();
+
+        return 6;
+    }
+    const f5 = function f5()
+    {
+        if (true)
+            return δ[test]();
+
+        return 6;
+    }
+    try
+    {
+        const toPromise = require("@cause/cause/to-promise");
+
+//        console.log(f + "");
+        console.log(f2 + "");
+        console.log(f5 + "");
+///        console.log(f3 + "");
+        console.log("--> " + await toPromise(Object, f()));
+        console.log("--> " + await toPromise(Object, f2()));
+        console.log("--> " + await toPromise(Object, f3()));
+        console.log("--> " + await toPromise(Object, f4()));
+        console.log("--> " + await toPromise(Object, f5()));
+
+    }
+    catch (e)
+    {
+        console.log(e);
+    }
+})();

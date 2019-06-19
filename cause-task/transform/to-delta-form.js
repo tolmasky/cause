@@ -90,9 +90,9 @@ function fromAST(symbols, fAST)
     const pOperator = (template =>
         operator => template({ operator: t.stringLiteral(operator) }))
         (template(`δ.operators[%%operator%%]`));
-    const pIf = template(`δ.depend(false, δ["if"], %%test%%, ` +
-        `δ.success(() => %%consequent%%), ` +
-        `δ.success(() => %%alternate%%))`);
+    const pIf = template(`δ.depend(false, δ.operators["if"], %%test%%, ` +
+        `δ.success([%%liftConsequent%%, () => %%consequent%%]), ` +
+        `δ.success([%%liftAlternate%%, () => %%alternate%%]))`);
 
     return babelMapAccum(Type, babelMapAccum.fromDefinitions(
     {
@@ -118,30 +118,36 @@ function fromAST(symbols, fAST)
                     `alternate returns ${alternateT}. I can currently ` +
                     `only handle non-function mismatches.`);
 
-            // If either side returns a State, both must.
-            const returnT = Type.concat(consequentT, alternateT);
+            // The result of this operation must match, so if either option is a
+            // State, the other must be lifted.
+            const nestedReturnT = Type.concat(consequentT, alternateT);
 
-            // It's trivial to lift the value sides, just wrap them.
-            const lift = (T, argument) =>
-                returnT === Type.State && T === Type.Value ?
-                    pSuccess({ argument }) :
-                    argument;
-            const newConsequent = lift(consequentT, consequent);
-            const newAlternate = lift(alternateT, alternate);
-
-            // The "consequent" and "alternate" should never be waited on, as
-            // they are actually implicit lambdas that are only evaluated
-            // as a result of the value of "test". As such, if test is not a
-            // State, we should still use an inline conditional expression:
+            // The "consequent" and "alternate" themselves should never be waited
+            // on though, as they are actually implicit lambdas that are only
+            // evaluated as a result of the value of "test". As such, if test is
+            // not a State, we should still use an inline conditional expression:
             const [testT, test] = mapAccum(expression.test);
 
+            // The result of this operation must match, so if either option is a
+            // State, the other must be lifted.
             if (testT !== Type.State)
-                return [returnT,
-                    t.ConditionalExpression(test, newConsequent, newAlternate)];
+                return [nestedReturnT, t.ConditionalExpression(test,
+                    nestedReturnT === Type.State && consequentT !== Type.State ?
+                        pSuccess({ argument: consequent }) : consequent,
+                    nestedReturnT === Type.State && alternateT !== Type.State ?
+                        pSuccess({ argument: alternate }) : alternate)];
 
-            // Since "test" is a State, we need to wait on it:
-            return [returnT,
-                pIf({ test, consequent: newConsequent, alternate: newAlternate })];
+            // This case is a bit trickier. We can't rely on depend's lifting
+            // ability since depend expects to either always lift or not. But in
+            // our case, we could be in a situation where only one side needs
+            // lifting. As such, operators["if"] handles this for us, but we
+            // have to specify for each.
+            return [Type.State, pIf(
+            {
+                test, consequent, alternate,
+                liftConsequent: t.booleanLiteral(consequentT !== Type.State),
+                liftAlternate: t.booleanLiteral(alternateT !== Type.State)
+            })];
         },
 
         ArrayExpression(mapAccum, expression)

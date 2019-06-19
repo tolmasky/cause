@@ -1,4 +1,5 @@
 const { fromAST } = require("./to-delta-form");
+const insertDeclaration = Symbol("insertDeclaration");
 
 
 module.exports = function plugin({ types: t })
@@ -8,9 +9,8 @@ module.exports = function plugin({ types: t })
         (({ left: id, right: init }) => ({ id, init }))
         (parseExpression(`δ = require("@cause/task/δ")`));
 
-    const Program = path => void(path.hub.file.insertDeclaration = () =>
-        (path.scope.push(scope), delete path.hub.file.insertDeclaration));
-    const Function = toTaskForm;
+    const Program = path => void(path.hub.file[insertDeclaration] = () =>
+        (path.scope.push(scope), delete path.hub.file[insertDeclaration]));
 
     return  {
                 name: "@cause/task/transform",
@@ -18,7 +18,7 @@ module.exports = function plugin({ types: t })
             };
 }
 
-function toTaskForm(path, { file })
+function Function(path, { file })
 {
     const visited =
         path.node.visited ||
@@ -38,8 +38,8 @@ function toTaskForm(path, { file })
     if (!hasDelta)
         return;
 
-    if (file.insertDeclaration)
-        file.insertDeclaration();
+    if (file[insertDeclaration])
+        file[insertDeclaration]();
 
     const replacement = fromAST([], path.node)[1];
 

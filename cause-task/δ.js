@@ -38,6 +38,15 @@ module.exports.success = function (value)
     return Task.Success({ value });
 }
 
+function liftedCall(lift, f)
+{
+    if (!lift)
+        return f();
+
+    try { return Task.Success({ value: f() }); }
+    catch (e) { return Task.Failure({ error: e }); }
+}
+
 module.exports.operators = Object.fromEntries(Object.entries(
 {
     "+": (lhs, rhs) => lhs + rhs,
@@ -71,7 +80,7 @@ module.exports.operators = Object.fromEntries(Object.entries(
     "u(!)": value => !value,
 
     "if": (condition, consequent, alternate) =>
-        condition ? consequent() : alternate(),
+        liftedCall(...(condition ? consequent : alternate)),
 
     "u(typeof)": value => typeof value,
     "in": (lhs, rhs) => lhs in rhs,

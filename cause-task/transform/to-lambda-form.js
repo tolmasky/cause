@@ -32,6 +32,9 @@ const fromIfStatements = (function ()
         `(() => %%consequent%%)() : ` +
         `(() => %%alternate%%)())`);
 
+//        `return ((t, c, a) => t ? c() : a())` +
+//        `(%%test%%, () => %%consequent%%, () => %%alternate%%)`);
+
     return function fromIfStatements(mapAccum, statements)
     {
         // We want to be in single return form:
