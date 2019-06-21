@@ -220,6 +220,7 @@ function fromAST(symbols, fAST)
     }))(toLambdaForm.fromAST(fAST)[1]);
 
     // Delta Expressions are of the form:
+    // δ|f
     // δ[function-name] or [expression].δ[function-name]
     function tryDeltaExpression(expression)
     {
