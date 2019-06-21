@@ -56,3 +56,4 @@ Task.fromAsyncCall = function (fAsync, ...args)
 }
 
 module.exports = Task;
+module.exports.Task = Task;

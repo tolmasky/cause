@@ -83,14 +83,35 @@ function prefix(operator)
 function fromAST(symbols, fAST)
 {
     const { parseExpression } = require("@babel/parser");
-    const template = require("@babel/template").expression;
-    const pWrap = template(`δ(%%argument%%)`);
-    const pSuccess = template(`δ.success(%%argument%%)`);
-    const pDepend = template(`δ.depend(%%lifted%%, %%callee%%, %%arguments%%)`);
+    const template = require("./template");
+    const template2 = require("@babel/template").expression;
+
+    const tδ = template((value, ...ds) => δ(value, ds));
+    const t_ds = (...args) => args
+        .flatMap((value, index) => value ? [index] : []);
+    const tMaybeδ = (value, ds) => ds.length > 0 ? tδ(value, ...ds) : value;
+
+    const tδ_depend = template((lifted, ...args) => δ.depend(lifted, args));
+
+    const t_thunk = template(expression => () => expression);
+    const t_defer = expression =>
+        t.isCallExpression(expression) &&
+        t.isIdentifier(expression.callee) &&
+        expression.arguments.length === 0 ?
+            expression.callee :
+            t_thunk(expression);
+
+    const tδ_success = template(expression => δ.success(expression));
+    const tδ_operator = template(name => δ.operators[name]);
+    const tδ_ternary = tδ_operator("?:");
+
+    const pWrap = template2(`δ(%%argument%%)`);
+    const pSuccess = template2(`δ.success(%%argument%%)`);
+    const pDepend = template2(`δ.depend(%%lifted%%, %%callee%%, %%arguments%%)`);
     const pOperator = (template =>
-        operator => template({ operator: t.stringLiteral(operator) }))
-        (template(`δ.operators[%%operator%%]`));
-    const pIf = template(`δ.depend(false, δ.operators["if"], %%test%%, ` +
+        operator => template2({ operator: t.stringLiteral(operator) }))
+        (template2(`δ.operators[%%operator%%]`));
+    const pIf = template2(`δ.depend(false, δ.operators["if"], %%test%%, ` +
         `δ.success([%%liftConsequent%%, () => %%consequent%%]), ` +
         `δ.success([%%liftAlternate%%, () => %%alternate%%]))`);
 
@@ -109,6 +130,7 @@ function fromAST(symbols, fAST)
             const [alternateT, alternate] = mapAccum(expression.alternate);
             const mismatch = consequentT !== alternateT;
 
+            // FIXME: *Is* this too hard to figure out?
             if (mismatch &&
                 (is(Type.Function, consequentT) ||
                  is(Type.Function, alternateT)))
@@ -123,9 +145,9 @@ function fromAST(symbols, fAST)
             const nestedReturnT = Type.concat(consequentT, alternateT);
 
             // The "consequent" and "alternate" themselves should never be waited
-            // on though, as they are actually implicit lambdas that are only
-            // evaluated as a result of the value of "test". As such, if test is
-            // not a State, we should still use an inline conditional expression:
+            // on though, as they only get evaluated depending on the result of
+            // test. As such, if test is not a State, we can still use an inline
+            // conditional expression:
             const [testT, test] = mapAccum(expression.test);
 
             // The result of this operation must match, so if either option is a
@@ -133,21 +155,24 @@ function fromAST(symbols, fAST)
             if (testT !== Type.State)
                 return [nestedReturnT, t.ConditionalExpression(test,
                     nestedReturnT === Type.State && consequentT !== Type.State ?
-                        pSuccess({ argument: consequent }) : consequent,
+                        tδ_success(consequent) : consequent,
                     nestedReturnT === Type.State && alternateT !== Type.State ?
-                        pSuccess({ argument: alternate }) : alternate)];
+                        tδ_success(alternate) : alternate)];
+
+            const d1 = consequentT === Type.State;
+            const d2 = alternateT === Type.State;
 
             // This case is a bit trickier. We can't rely on depend's lifting
             // ability since depend expects to either always lift or not. But in
             // our case, we could be in a situation where only one side needs
             // lifting. As such, operators["if"] handles this for us, but we
             // have to specify for each.
-            return [Type.State, pIf(
-            {
-                test, consequent, alternate,
-                liftConsequent: t.booleanLiteral(consequentT !== Type.State),
-                liftAlternate: t.booleanLiteral(alternateT !== Type.State)
-            })];
+            return [Type.State, tδ_depend(
+                false,
+                tMaybeδ(tδ_ternary, t_ds(false, d1, d2)),
+                test,
+                tδ_success(t_defer(consequent)),
+                tδ_success(t_defer(alternate)))];
         },
 
         ArrayExpression(mapAccum, expression)
@@ -263,6 +288,18 @@ function fromAST(symbols, fAST)
         const argumentsT = argumentPairs.reduce(
             (T, [argumentT]) => Type.concat(T, argumentT),
             Type.identity);
+/*
+        if (is (Type.State, argumentsT))
+        {
+            const arguments = argumentPairs.map(
+                ([argumentT, argument]) => is (Type.State, argumentT) ?
+                    argument : pSuccess({ argument }));
+            const delta = calleeT !== Type.fToState ?
+                tδ(callee) : pSuccess(callee);
+console.log("HERE!");
+            return [Type.State, { ...expression, arguments, callee: delta }];
+        }*/
+
         const dependenciesT = Type.concat(calleeT, argumentsT);
 
         if (is (Type.State, dependenciesT))
