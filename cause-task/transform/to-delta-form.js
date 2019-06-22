@@ -109,11 +109,8 @@ function fromAST(symbols, fAST)
     const pSuccess = template2(`δ.success(%%argument%%)`);
     const pDepend = template2(`δ.depend(%%lifted%%, %%callee%%, %%arguments%%)`);
     const pOperator = (template =>
-        operator => template2({ operator: t.stringLiteral(operator) }))
+        operator => template({ operator: t.stringLiteral(operator) }))
         (template2(`δ.operators[%%operator%%]`));
-    const pIf = template2(`δ.depend(false, δ.operators["if"], %%test%%, ` +
-        `δ.success([%%liftConsequent%%, () => %%consequent%%]), ` +
-        `δ.success([%%liftAlternate%%, () => %%alternate%%]))`);
 
     return babelMapAccum(Type, babelMapAccum.fromDefinitions(
     {
