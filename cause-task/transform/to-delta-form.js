@@ -106,11 +106,6 @@ function fromAST(symbols, fAST)
     const tδ_ternary = tδ_operator("?:");
 
     const pWrap = template2(`δ(%%argument%%)`);
-    const pSuccess = template2(`δ.success(%%argument%%)`);
-    const pDepend = template2(`δ.depend(%%lifted%%, %%callee%%, %%arguments%%)`);
-    const pOperator = (template =>
-        operator => template({ operator: t.stringLiteral(operator) }))
-        (template2(`δ.operators[%%operator%%]`));
 
     return babelMapAccum(Type, babelMapAccum.fromDefinitions(
     {
@@ -183,7 +178,7 @@ function fromAST(symbols, fAST)
                 return [Type.Value, expression];
 
             const [_, elements] = asCallExpression.arguments;
-            const operator = pOperator("=([])");
+            const operator = tδ_operator("=([])");
             const pArguments = [operator, elements];
 
             return [returnT, { ...asCallExpression, arguments: pArguments }];
@@ -271,7 +266,7 @@ function fromAST(symbols, fAST)
             return [Type.Value, expression];
 
         const [lifted, _, left, right] = asCallExpression.arguments;
-        const operator = pOperator(expression.operator);
+        const operator = tδ_operator(expression.operator);
         const pArguments = [lifted, operator, left, right];
 
         return [returnT, { ...asCallExpression, arguments: pArguments }];
@@ -281,34 +276,23 @@ function fromAST(symbols, fAST)
     {
         const [calleeT, callee] = mapAccum(expression.callee);
         const wrappedCallee = calleeT !== Type.State ?
-            pSuccess({ argument: callee }) : callee;
+            tδ_success(callee) : callee;
         const argumentPairs = expression.arguments.map(mapAccum);
         const argumentsT = argumentPairs.reduce(
             (T, [argumentT]) => Type.concat(T, argumentT),
             Type.identity);
-/*
-        if (is (Type.State, argumentsT))
-        {
-            const arguments = argumentPairs.map(
-                ([argumentT, argument]) => is (Type.State, argumentT) ?
-                    argument : pSuccess({ argument }));
-            const delta = calleeT !== Type.fToState ?
-                tδ(callee) : pSuccess(callee);
-console.log("HERE!");
-            return [Type.State, { ...expression, arguments, callee: delta }];
-        }*/
 
         const dependenciesT = Type.concat(calleeT, argumentsT);
 
         if (is (Type.State, dependenciesT))
         {
-            const arguments = argumentPairs.map(
-                ([argumentT, argument]) => is (Type.State, argumentT) ?
-                    argument : pSuccess({ argument }));
-            const lifted = t.booleanLiteral(calleeT !== Type.fToState);
-            const pCall = pDepend({ lifted, callee: wrappedCallee, arguments });
+            const lifted = calleeT !== Type.fToState;
+            const wrappedArguments = argumentPairs.map(
+                ([argumentT, argument]) => is(Type.State, argumentT) ?
+                    argument : tδ_success(argument));
 
-            return [Type.State, pCall];
+            return [Type.State,
+                tδ_depend(lifted, wrappedCallee, ...wrappedArguments)];
         }
 
         const arguments = argumentPairs.map(([, argument]) => argument);

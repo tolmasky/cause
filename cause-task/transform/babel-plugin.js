@@ -31,7 +31,7 @@ function Function(path, { file })
 
     path.traverse(
     {
-        Function(path) { path.skip() },
+        Function: path => path.skip(),
         Identifier({ node }) { hasDelta = hasDelta || node.name === "δ" }
     });
 
