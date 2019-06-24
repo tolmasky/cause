@@ -172,7 +172,7 @@ function fromAST(symbols, fAST)
             // have to specify for each.
             return [Type.State, tδ_depend(
                 false,
-                tMaybeδ(tδ_ternary, t_ds(false, d1, d2)),
+                tδ_success(tMaybeδ(tδ_ternary, t_ds(false, d1, d2))),
                 test,
                 tδ_success(t_defer(consequent)),
                 tδ_success(t_defer(alternate)))];
@@ -188,9 +188,8 @@ function fromAST(symbols, fAST)
         ArrayExpression(mapAccum, expression)
         {
             const callee = t.argumentPlaceholder();
-            const arguments = expression.elements;
-            const [returnT, asCallExpression] =
-                CallExpression(mapAccum, { callee, arguments });
+            const [returnT, asCallExpression] = CallExpression(mapAccum,
+                { callee, arguments: expression.elements });
 
             if (returnT === Type.Value)
                 return [Type.Value, expression];
@@ -229,16 +228,15 @@ function fromAST(symbols, fAST)
         if (!t.isCallExpression(expression))
             return [false];
 
-        const { callee, arguments } = expression;
         const [isCalleeDeltaMemberAccess, calleeAccess] =
-            tryDeltaMemberAccess(callee);
+            tryDeltaMemberAccess(expression.callee);
 
         if (isCalleeDeltaMemberAccess)
             return [true, tδ_apply(
                 calleeAccess[0],
                 t.stringLiteral(calleeAccess[1].name),
                 calleeAccess[2],
-                arguments)];
+                expression.arguments)];
 
         const [isDeltaMemberAccess, access] = tryDeltaMemberAccess(expression);
 
@@ -256,13 +254,13 @@ function fromAST(symbols, fAST)
         if (!t.isCallExpression(expression))
             return [false];
 
-        const { callee, arguments } = expression;
+        const { callee, arguments: args } = expression;
 
         // All three options are call expressions.
         if (!t.isMemberExpression(callee) || !isδ(callee.property))
             return [false];
 
-        return [true, [callee.object, arguments[0], arguments.slice(1)]];
+        return [true, [callee.object, args[0], args.slice(1)]];
     }
 
     function FunctionExpression(mapAccum, expression)
@@ -286,15 +284,15 @@ function fromAST(symbols, fAST)
         }
 
         const callee = t.argumentPlaceholder();
-        const arguments = [expression.left, expression.right];
+        const args = [expression.left, expression.right];
         const [returnT, asCallExpression] =
-            CallExpression(mapAccum, { callee, arguments });
+            CallExpression(mapAccum, { callee, arguments: args });
 
         if (returnT === Type.Value)
             return [Type.Value, expression];
 
         const [lifted, _, left, right] = asCallExpression.arguments;
-        const fOperator = tδ_operator(expression.operator);
+        const fOperator = tδ_success(tδ_operator(expression.operator));
         const pArguments = [lifted, fOperator, left, right];
 
         return [returnT, { ...asCallExpression, arguments: pArguments }];
@@ -329,8 +327,8 @@ function fromAST(symbols, fAST)
                 tδ_depend(lifted, wrappedCallee, ...wrappedArguments)];
         }
 
-        const arguments = argumentPairs.map(([, argument]) => argument);
-        const updated = { ...expression, callee, arguments };
+        const args = argumentPairs.map(([, argument]) => argument);
+        const updated = { ...expression, callee, arguments: args };
         const wrapped = calleeT === Type.fToState ?
             pWrap({ argument: updated }) : updated;
 

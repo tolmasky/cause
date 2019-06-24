@@ -1,53 +1,46 @@
-const type = require("@algebraic/type");
-const { List } = require("@algebraic/collections");
-const Task = require("@cause/task");
-const { Dependent, Dependency } = require("@cause/task/dependent");
-const { iterator } = Symbol;
-const { isArray } = Array;
+const { fNamed } = require("@algebraic/type/declaration");
+const { Task, fromAsync } = require("@cause/task");
+const Dependent = require("@cause/task/dependent");
+const CachedDeltas = Symbol("δs");
+const get = (object, key, make) => object[key] || (object[key] = make());
+const cache = (f, ds, getδf) =>
+    get(get(f, CachedDeltas, () => Object.create(null)),
+        JSON.stringify(ds), () =>
+            fNamed(`(δ/${ds.map(d => `δ${d}`).join("")})(${f.name})`,
+                getδf(f, ds)));
+const success = value => Task.Success({ value });
 
 
-module.exports = function δ(task)
+module.exports = δ;
+
+function δ(f, ds)
 {
-    if (type.is(Dependency, task))
-        return task;
-
-    const isIterable =
-        typeof task !== "undefined" &&
-        typeof task !== "string" &&
-        typeof task[iterator] === "function";
-
-    if (!isIterable)
-        return Task.Failure({ error: TypeError(`Was not expecting ${task} at δ`) });
-
-    const typecast = isArray(task) ? Array.from : type.of(task);
-    const lifted = true;
-    const arguments = List(Dependency)(task);
-    const typecasted =  (...args) => typecast(args);
-    const callee = Task.Success({ value: typecasted });
-
-    return Dependent.wrap({ lifted, callee, arguments });
+    return cache(f, ds, fromStandard);
 }
 
-module.exports.depend = function (lifted, callee, ...arguments)
+δ.success = success;
+
+δ.depend = function (lifted, callee, ...rest)
 {
-    return Dependent.wrap({ lifted, callee, arguments });
+    return Dependent.wrap({ lifted, callee, arguments: rest });
 }
 
-module.exports.success = function (value)
+δ.apply = function (object, property, ds, args)
 {
-    return Task.Success({ value });
+    return δ(object[property], ds).apply(object, args);
 }
 
-function liftedCall(lift, f)
+function fromStandard(f, ds, knownSync = false)
 {
-    if (!lift)
-        return f();
+    if (ds.length > 0)
+        throw TypeError(`Can not take δ of ${f.name} on [${ds.join(", ")}]`);
 
-    try { return Task.Success({ value: f() }); }
-    catch (e) { return Task.Failure({ error: e }); }
+    return knownSync ?
+        (...args) => success(f(...args)) :
+        fromAsync((...args) => Promise.resolve(f(...args)));
 }
 
-module.exports.operators = Object.fromEntries(Object.entries(
+const operators = Object.fromEntries(Object.entries(
 {
     "+": (lhs, rhs) => lhs + rhs,
     "-": (lhs, rhs) => lhs - rhs,
@@ -55,8 +48,8 @@ module.exports.operators = Object.fromEntries(Object.entries(
     "/": (lhs, rhs) => lhs / rhs,
     "%": (lhs, rhs) => lhs / rhs,
     "**": (lhs, rhs) => lhs ** rhs,
-    "u(-)": value => -value,
-    "u(+)": value => +value,
+    "unary -": value => -value,
+    "unary +": value => +value,
 
     "&": (lhs, rhs) => lhs & rhs,
     "|": (lhs, rhs) => lhs | rhs,
@@ -64,7 +57,7 @@ module.exports.operators = Object.fromEntries(Object.entries(
     "<<": (lhs, rhs) => lhs << rhs,
     ">>": (lhs, rhs) => lhs >> rhs,
     ">>>": (lhs, rhs) => lhs >> rhs,
-    "u(~)": value => ~value,
+    "~": value => ~value,
 
     "==": (lhs, rhs) => lhs == rhs,
     "===": (lhs, rhs) => lhs === rhs,
@@ -75,20 +68,70 @@ module.exports.operators = Object.fromEntries(Object.entries(
     "<": (lhs, rhs) => lhs < rhs,
     "<=": (lhs, rhs) => lhs <= rhs,
 
-    "&&": (lhs, rhs) => lhs && rhs,
-    "||": (lhs, rhs) => lhs || rhs,
-    "u(!)": value => !value,
+    "!": value => !value,
 
-    "if": (condition, consequent, alternate) =>
-        liftedCall(...(condition ? consequent : alternate)),
-
-    "u(typeof)": value => typeof value,
+    "typeof": value => typeof value,
     "in": (lhs, rhs) => lhs in rhs,
-    "instancoef": (lhs, rhs) => lhs instanceof rhs,
+    "instanceof": (lhs, rhs) => lhs instanceof rhs,
 
     ".": (lhs, rhs) => (value =>
         typeof value === "function" ?
-            value.bind(lhs) : value)(lhs[rhs]),
+            value.bind(lhs) : value)(lhs[rhs])
 
-    "=([])": (...args) => args
-}).map(([operator, f]) => [operator, Task.Success({ value: f })]));
+}).map(([operator, f]) =>
+    [operator, (cache(fNamed(operator, f), [],
+        (f, ds) => fromStandard(f, ds, true)), f)]));
+
+operators["?:"] = fNamed("?:",
+    (test, consequent, alternate) =>
+        test ? consequent() : alternate());
+
+cache(operators["?:"], [1], () =>
+    (test, δconsequent, alternate) =>
+        test ? δconsequent() : success(alternate()));
+cache(operators["?:"], [2], () =>
+    (test, consequent, δalternate) =>
+        test ? success(consequent()) : δalternate());
+cache(operators["?:"], [1,2], () =>
+    (test, δconsequent, δalternate) =>
+        test ? δconsequent() : δalternate());
+
+operators["||"] = fNamed("||", () => (lhs, rhs) => lhs() || rhs());
+cache(operators["||"], [0], () => (δlhs, rhs) => δlhs() || success(rhs()));
+cache(operators["||"], [1], () => (lhs, δrhs) => success(lhs()) || δrhs());
+cache(operators["||"], [0, 1], () => (δlhs, δrhs) => δlhs() || δrhs());
+
+operators["&&"] = fNamed("&&", () => (lhs, rhs) => lhs() && rhs());
+cache(operators["&&"], [0], () => (δlhs, rhs) => δlhs() && success(rhs()));
+cache(operators["&&"], [1], () => (lhs, δrhs) => success(lhs()) && δrhs());
+cache(operators["&&"], [0, 1], () => (δlhs, δrhs) => δlhs() && δrhs());
+
+cache(Array.prototype.map, [0], () => function (f)
+{
+    const dependencies = Array.prototype.map.call(this, f);
+    const callee = (...args) => Array.from(args);
+
+    return δ.depend(true, δ.success(callee), ...dependencies);
+});
+
+δ.operators = operators;
+
+/*
+console.log(δ(operators["?:"], [1])+"");
+console.log(δ(operators["?:"], [1]));
+console.log(δ(operators["?:"], [2]));
+console.log(δ(operators["?:"], [1, 2]));
+
+console.log(δ(operators["||"], [0])+"");
+console.log(δ(operators["||"], [0]));
+console.log(δ(operators["||"], [1]));
+console.log(δ(operators["||"], [0, 1]));
+
+console.log(δ(operators["&&"], [0])+"");
+console.log(δ(operators["&&"], [0]));
+console.log(δ(operators["&&"], [1]));
+console.log(δ(operators["&&"], [0, 1]));
+
+//console.log(δ(operators["+"], [1, 2]));
+console.log(δ(operators["&&"], [1])+"");
+module.exports.operators = operators;*/
