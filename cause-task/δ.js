@@ -106,13 +106,21 @@ cache(operators["&&"], [0], () => (δlhs, rhs) => δlhs() && success(rhs()));
 cache(operators["&&"], [1], () => (lhs, δrhs) => success(lhs()) && δrhs());
 cache(operators["&&"], [0, 1], () => (δlhs, δrhs) => δlhs() && δrhs());
 
-cache(Array.prototype.map, [0], () => function (f)
+const δmap = (map, convertBack) => cache(map, [0], () => function (f)
 {
-    const dependencies = Array.prototype.map.call(this, f);
-    const callee = (...args) => Array.from(args);
+    const dependencies = map.call(this, f);
+    const callee = (...args) => convertBack(args);
 
     return δ.depend(true, success(callee), ...dependencies);
 });
+
+δmap(Array.prototype.map, Array.from);
+
+const { List, Set, OrderedSet, Seq, Stack } = require("@algebraic/collections");
+
+[List, Set, OrderedSet, Seq, Stack]
+    .map(type => [type, Object.getPrototypeOf(type(Object)())])
+    .map(([type, prototype]) => δmap(prototype.map, type(Object)));
 
 δ.operators = operators;
 
