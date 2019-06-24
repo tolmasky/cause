@@ -86,7 +86,15 @@ function fromAST(symbols, fAST)
     const template = require("./template");
     const template2 = require("@babel/template").expression;
 
-    const tδ = template((value, ds) => δ(value, ds));
+    const tδ = (template =>
+        (value, ds) => template(value, ds.length > 0 ? ds : [0]))
+        (template((value, ds) => δ(value, ds)));
+    const tδ_apply = (template =>
+        (object, property, ds, args) =>
+            template(object, property, ds.length > 0 ? ds : [0], args))
+        (template((object, property, ds, args) =>
+            δ.apply(object, property, ds, args)));
+
     const t_ds = (...args) => args
         .flatMap((value, index) => value ? [index] : []);
     const tMaybeδ = (value, ds) => ds.length > 0 ? tδ(value, ds) : value;
@@ -104,8 +112,7 @@ function fromAST(symbols, fAST)
     const tδ_success = template(expression => δ.success(expression));
     const tδ_operator = template(name => δ.operators[name]);
     const tδ_ternary = tδ_operator("?:");
-    const tδ_apply = template((object, property, ds, args) =>
-        δ.apply(object, property, ds, args));
+
 
     const isδ = node => t.isIdentifier(node) && node.name === "δ";
 
@@ -197,12 +204,6 @@ function fromAST(symbols, fAST)
 
         MemberExpression(mapAccum, expression)
         {
-            const [isDeltaExpression, modified] =
-                tryDeltaExpression(expression);
-
-            if (isDeltaExpression)
-                return [Type.fToState, mapAccum(modified)[1]];
-
             const { object, property, computed } = expression;
             const left = object;
             const right = computed ? property : t.stringLiteral(property.name);
@@ -262,41 +263,6 @@ function fromAST(symbols, fAST)
             return [false];
 
         return [true, [callee.object, arguments[0], arguments.slice(1)]];
-    }
-
-    // Delta Expressions are of the form:
-    // δ|f
-    // δ[function-name] or [expression].δ[function-name]
-    function tryDeltaExpression(expression)
-    {
-        // Both δ[function-name] and [expression].δ[function-name] are computed
-        // MemberExpressions
-        if (!t.isMemberExpression(expression) || !expression.computed)
-            return [false];
-
-        const { object, property } = expression;
-
-        // Both δ[function-name] and [expression].δ[function-name] have a single
-        // identifier as a property (the function name).
-        if (!t.isIdentifier(property))
-            return [false];
-
-        // If the object is the δ-identifier, return the property as the new
-        // representation of the entire expression:
-        // δ[function-name] -> function-name
-        if (t.isIdentifier(object) && object.name === "δ")
-            return [true, property];
-
-        // The only remaining case is [expression].δ[function-name], which means
-        // the object must also be a member expression, but with the
-        // δ-identifier as the property.
-        if (!t.isMemberExpression(object) ||
-            object.computed ||
-            object.property.name !== "δ")
-            return [false];
-
-        // In this case, remove the intermediate δ-identifier.
-        return [true, { ...object, property }];
     }
 
     function FunctionExpression(mapAccum, expression)
