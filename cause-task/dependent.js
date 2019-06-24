@@ -63,7 +63,7 @@ Dependency.Completed = union `Task.Dependency.Completed` (
     Dependency.Success,
     Dependency.Failure );
 
-Dependent.wrap = function from({ lifted, callee, arguments })
+Dependent.from = Dependent.wrap = function from({ lifted, callee, arguments })
 {
     const dependencies = List(Argument)([callee, ...arguments].map(
         (dependency, index) => Argument({ index: index - 1, dependency })));
@@ -144,4 +144,23 @@ function andEvents(value)
 {
     return [value, [value]];
 }
+
+
+function toPromiseThen(onResolve, onReject)
+{
+    return require("@cause/cause/to-promise")(Object, this).then(onResolve, onReject);
+}
+
+function toPromiseCatch(onReject)
+{
+    return require("@cause/cause/to-promise")(Object, this).catch(onReject);
+}
+
+for (const type of [...union.components(Task), ...union.components(Dependent)])
+{
+    type.prototype.then = toPromiseThen;
+    type.prototype.catch = toPromiseCatch;
+}
+
+
 

@@ -111,7 +111,7 @@ cache(Array.prototype.map, [0], () => function (f)
     const dependencies = Array.prototype.map.call(this, f);
     const callee = (...args) => Array.from(args);
 
-    return δ.depend(true, δ.success(callee), ...dependencies);
+    return δ.depend(true, success(callee), ...dependencies);
 });
 
 δ.operators = operators;
