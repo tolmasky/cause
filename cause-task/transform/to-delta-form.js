@@ -86,10 +86,10 @@ function fromAST(symbols, fAST)
     const template = require("./template");
     const template2 = require("@babel/template").expression;
 
-    const tδ = template((value, ...ds) => δ(value, ds));
+    const tδ = template((value, ds) => δ(value, ds));
     const t_ds = (...args) => args
         .flatMap((value, index) => value ? [index] : []);
-    const tMaybeδ = (value, ds) => ds.length > 0 ? tδ(value, ...ds) : value;
+    const tMaybeδ = (value, ds) => ds.length > 0 ? tδ(value, ds) : value;
 
     const tδ_depend = template((lifted, ...args) => δ.depend(lifted, args));
 
@@ -104,6 +104,10 @@ function fromAST(symbols, fAST)
     const tδ_success = template(expression => δ.success(expression));
     const tδ_operator = template(name => δ.operators[name]);
     const tδ_ternary = tδ_operator("?:");
+    const tδ_apply = template((object, property, ds, args) =>
+        δ.apply(object, property, ds, args));
+
+    const isδ = node => t.isIdentifier(node) && node.name === "δ";
 
     const pWrap = template2(`δ(%%argument%%)`);
 
@@ -166,6 +170,13 @@ function fromAST(symbols, fAST)
                 tδ_success(t_defer(consequent)),
                 tδ_success(t_defer(alternate)))];
         },
+/*
+        AwaitExpression(mapAccum, expression)
+        {
+            const [, right] = mapAccum(expression.argument);
+        //console.log(expression.right);
+            return [Type.State, right];
+        },*/
 
         ArrayExpression(mapAccum, expression)
         {
@@ -177,9 +188,9 @@ function fromAST(symbols, fAST)
             if (returnT === Type.Value)
                 return [Type.Value, expression];
 
-            const [_, elements] = asCallExpression.arguments;
+            const [lifted, _, ...elements] = asCallExpression.arguments;
             const operator = tδ_operator("=([])");
-            const pArguments = [operator, elements];
+            const pArguments = [lifted, operator, ...elements];
 
             return [returnT, { ...asCallExpression, arguments: pArguments }];
         },
@@ -210,6 +221,48 @@ function fromAST(symbols, fAST)
             return [returnT, updated];
         }
     }))(toLambdaForm.fromAST(fAST)[1]);
+
+    function tryDeltaMemberShorthand(expression)
+    {
+        // All three options are call expressions.
+        if (!t.isCallExpression(expression))
+            return [false];
+
+        const { callee, arguments } = expression;
+        const [isCalleeDeltaMemberAccess, calleeAccess] =
+            tryDeltaMemberAccess(callee);
+
+        if (isCalleeDeltaMemberAccess)
+            return [true, tδ_apply(
+                calleeAccess[0],
+                t.stringLiteral(calleeAccess[1].name),
+                calleeAccess[2],
+                arguments)];
+
+        const [isDeltaMemberAccess, access] = tryDeltaMemberAccess(expression);
+
+        return isDeltaMemberAccess ?
+            [true, tδ(t.MemberExpression(access[0], access[1]), access[2])] : [false];
+    }
+
+    // We allow the following shorthand conversions:
+    // 1. [expression].δ(f, ...ds) -> δ([expression].f, ...ds)
+    // 2. [expression].δ(f, ...ds)(...args) -> δ.apply([expression], f, ...ds)(...args)
+    // -3-. [expression].δδ(f, ...ds)(...args) -> δ.apply([expression], f, ds, ...args)
+    function tryDeltaMemberAccess(expression)
+    {
+        // All three options are call expressions.
+        if (!t.isCallExpression(expression))
+            return [false];
+
+        const { callee, arguments } = expression;
+
+        // All three options are call expressions.
+        if (!t.isMemberExpression(callee) || !isδ(callee.property))
+            return [false];
+
+        return [true, [callee.object, arguments[0], arguments.slice(1)]];
+    }
 
     // Delta Expressions are of the form:
     // δ|f
@@ -257,6 +310,15 @@ function fromAST(symbols, fAST)
 
     function BinaryExpression(mapAccum, expression)
     {
+        const { operator } = expression;
+
+        if (operator === "|" && isδ(expression.left))
+        {
+            const [, right] = mapAccum(expression.right);
+
+            return [Type.State, right];
+        }
+
         const callee = t.argumentPlaceholder();
         const arguments = [expression.left, expression.right];
         const [returnT, asCallExpression] =
@@ -266,14 +328,20 @@ function fromAST(symbols, fAST)
             return [Type.Value, expression];
 
         const [lifted, _, left, right] = asCallExpression.arguments;
-        const operator = tδ_operator(expression.operator);
-        const pArguments = [lifted, operator, left, right];
+        const fOperator = tδ_operator(expression.operator);
+        const pArguments = [lifted, fOperator, left, right];
 
         return [returnT, { ...asCallExpression, arguments: pArguments }];
     }
 
     function CallExpression(mapAccum, expression)
     {
+        const [isDeltaMemberShorthand, modified] =
+            tryDeltaMemberShorthand(expression);
+
+        if (isDeltaMemberShorthand)
+            return mapAccum(modified);
+
         const [calleeT, callee] = mapAccum(expression.callee);
         const wrappedCallee = calleeT !== Type.State ?
             tδ_success(callee) : callee;
