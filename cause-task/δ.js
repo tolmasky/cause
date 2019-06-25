@@ -97,14 +97,22 @@ cache(operators["?:"], [1,2], () =>
         test ? δconsequent() : δalternate());
 
 operators["||"] = fNamed("||", () => (lhs, rhs) => lhs() || rhs());
-cache(operators["||"], [0], () => (δlhs, rhs) => δlhs() || success(rhs()));
-cache(operators["||"], [1], () => (lhs, δrhs) => success(lhs()) || δrhs());
-cache(operators["||"], [0, 1], () => (δlhs, δrhs) => δlhs() || δrhs());
+cache(operators["||"], [0], () => (δlhs, rhs) =>
+    δ.depend(false, lhsValue => success(lhsValue || rhs()), δlhs()));
+cache(operators["||"], [1], () => (lhs, δrhs) =>
+    (lhsValue => lhsValue ? success(lhsValue) : δrhs())(lhs()));
+cache(operators["||"], [0, 1], () => (δlhs, δrhs) =>
+    δ.depend(false, lhsValue =>
+        lhsValue ? success(lhsValue) : δrhs(), δlhs()));
 
 operators["&&"] = fNamed("&&", () => (lhs, rhs) => lhs() && rhs());
-cache(operators["&&"], [0], () => (δlhs, rhs) => δlhs() && success(rhs()));
-cache(operators["&&"], [1], () => (lhs, δrhs) => success(lhs()) && δrhs());
-cache(operators["&&"], [0, 1], () => (δlhs, δrhs) => δlhs() && δrhs());
+cache(operators["&&"], [0], () => (δlhs, rhs) =>
+    δ.depend(false, lhsValue => success(lhsValue && rhs()), δlhs()));
+cache(operators["&&"], [1], () => (lhs, δrhs) =>
+    (lhsValue => !lhsValue ? success(lhsValue) : δrhs())(lhs()));
+cache(operators["&&"], [0, 1], () => (δlhs, δrhs) =>
+    δ.depend(false, lhsValue =>
+        !lhsValue ? success(lhsValue) : δrhs(), δlhs()));
 
 const δmap = (map, convertBack) => cache(map, [0], () => function (f)
 {

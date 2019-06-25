@@ -122,7 +122,6 @@ function fromAST(symbols, fAST)
     {
         BinaryExpression,
         CallExpression,
-        LogicalExpression: BinaryExpression,
 
         FunctionExpression,
         ArrowFunctionExpression: FunctionExpression,
@@ -199,6 +198,23 @@ function fromAST(symbols, fAST)
             const pArguments = [lifted, operator, ...elements];
 
             return [returnT, { ...asCallExpression, arguments: pArguments }];
+        },
+
+        LogicalExpression(mapAccum, expression)
+        {
+            const [leftT, left] = mapAccum(expression.left);
+            const [rightT, right] = mapAccum(expression.right);
+            const d0 = leftT === Type.State;
+            const d1 = rightT === Type.State;
+
+            if (!d0 && !d1)
+                return [Type.Value, expression];
+
+            const fOperator = tδ_operator(expression.operator);
+            const δoperator = tδ(fOperator, t_ds(d0, d1));
+            const args = [t_defer(left), t_defer(right)];
+
+            return [Type.State, t.CallExpression(δoperator, args)];
         },
 
         MemberExpression(mapAccum, expression)
@@ -292,7 +308,7 @@ function fromAST(symbols, fAST)
             return [Type.Value, expression];
 
         const [lifted, _, left, right] = asCallExpression.arguments;
-        const fOperator = tδ_success(tδ_operator(expression.operator));
+        const fOperator = tδ_success(tδ_operator(operator));
         const pArguments = [lifted, fOperator, left, right];
 
         return [returnT, { ...asCallExpression, arguments: pArguments }];
@@ -331,8 +347,8 @@ function fromAST(symbols, fAST)
         const updated = { ...expression, callee, arguments: args };
         const wrapped = calleeT === Type.fToState ?
             pWrap({ argument: updated }) : updated;
-
-        return [Type.returns(calleeT), wrapped];
+//if (calleeT === Type.fToState) { console.log(require("@babel/generator").default(updated).code); process.exit(1) }
+        return [Type.returns(calleeT), updated];
     }
 }
 
