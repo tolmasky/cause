@@ -13,29 +13,36 @@ const aliasesForTypes = Object.fromEntries(
         .filter(key => key.match(/^[A-Z].*[a-z]$/))
         .map(key => [key, t.ALIAS_KEYS[key] || []])
         .map(([key, keys]) => [key, [key, ...keys, "Any"]]));
+const aliasIndexesForTypes = Object.fromEntries(Object
+    .entries(aliasesForTypes)
+    .map(([type, aliases]) => [type,
+        Object.fromEntries(aliases.map((alias, index) => [alias, index]))]));
+
 const fail = node =>
     { throw Error(`Ran out of fallback handlers for ${node.type}`); };
 
 module.exports.babel = function babel(definitions, node)
 {
-    return map_(function forNode(map, after, node)
+    const as = function (as, node)
     {
         if (node === void(0) || node === null)
             return node;
 
         const type = Array.isArray(node) ? "Array" : node.type;
         const aliases = aliasesForTypes[type];
+        const after = aliasIndexesForTypes[type][as];
         const index = aliases
             .findIndex((key, index) =>
-                index > after && definitions[key]);
+                index >= after && definitions[key]);
 
         return index >= 0 ?
-            definitions[aliases[index]](next =>
-                map(node === next ? index : -1, next),
-                node, fallback) :
-            fallback(next =>
-                node === next ? fail(next) : map(-1, next), node);
-    }, -1, node);
+            definitions[aliases[index]](map, node) :
+            fallback(map, node);
+    };
+    const children = node => fallback(map, node);
+    const map = Object.assign(node => as(node.type, node), { as, children });
+
+    return map(node);
 }
 
 function fallback(map, node)

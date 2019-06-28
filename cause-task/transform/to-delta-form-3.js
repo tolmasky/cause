@@ -139,7 +139,22 @@ function fromAST(symbols, fAST)
 
     return map.babel(
     {
-        Any,
+        Any(map, node)
+        {
+            const updated = map.children(node);
+            const fields = Array.isArray(node) ?
+                node :
+                toVisitorKeys(node).map(field => updated[field]);
+
+            fields.map(node => node && derived(node).wrt &&
+                fail.syntax(
+                    "wrt[] can only be used in the call or argument position."));
+
+            if (!Array.isArray(node))
+                console.log("EXPRESSION!" + require("@babel/generator").default(node).code);
+
+            return updated;
+        },
 
         Statement(map, { type })
         {
@@ -149,19 +164,19 @@ function fromAST(symbols, fAST)
             throw SyntaxError(`${name}s are not allowed in concurrent functions`);
         },
 
-        BlockStatement(map, block, fallback)
+        BlockStatement(map, block)
         {
-            return Any(map, block, fallback);
+            return map.as("Node", block);
         },
 
         VariableDeclaration(map, block, fallback)
         {
-            return Any(map, block, fallback);
+            return map.as("Node", block);
         },
 
         ReturnStatement(map, block, fallback)
         {
-            return Any(map, block, fallback);
+            return map.as("Node", block);
         },
 
         CallExpression(map, expression)
@@ -182,26 +197,11 @@ function fromAST(symbols, fAST)
 
             return computed && t.isIdentifier(object, { name: "wrt" }) ?
                 derived(property, { wrt: true }) :
-                map(expression);
+                map.as("Expression", expression);
         }
     }, fAST);
 
-    function Any(map, node, fallback)
-    {
-        const updated = fallback(map, node);
-        const fields = Array.isArray(node) ?
-            node :
-            toVisitorKeys(node).map(field => updated[field]);
 
-        fields.map(node => node && derived(node).wrt &&
-            fail.syntax(
-                "wrt[] can only be used in the call or argument position."));
-
-        if (!Array.isArray(node))
-            console.log("EXPRESSION!" + require("@babel/generator").default(node).code);
-
-        return updated;
-    };
 
     /*
         BinaryExpression,
