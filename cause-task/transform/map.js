@@ -11,7 +11,8 @@ const t = require("@babel/types");
 const aliasesForTypes = Object.fromEntries(
     ["Array", ...Object.keys(t)]
         .filter(key => key.match(/^[A-Z].*[a-z]$/))
-        .map(key => [key, [key, ...(t.ALIAS_KEYS[key] || [])]]));
+        .map(key => [key, t.ALIAS_KEYS[key] || []])
+        .map(([key, keys]) => [key, [key, ...keys, "Any"]]));
 const fail = node =>
     { throw Error(`Ran out of fallback handlers for ${node.type}`); };
 
@@ -80,3 +81,5 @@ const toVisitorKeys = (function ()
                 fieldsWitholdingComputed[type];
     }
 })();
+
+module.exports.toVisitorKeys = toVisitorKeys;

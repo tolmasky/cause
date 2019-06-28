@@ -16,6 +16,9 @@ const has = (({ hasOwnProperty }) =>
     (Object);
 
 const map = require("./map");
+const fail = Object.assign(
+    (Error, message) => { throw Error(message); },
+    { syntax: message => fail(SyntaxError, message) });
 
 const δ = require("@cause/task/δ");
 
@@ -96,7 +99,7 @@ function fromAST(symbols, fAST)
     const toComputedProperty = expression => !expression.computed ?
         t.stringLiteral(expression.property.name) : expression.property;
     const tδ = ((call, apply) =>
-        (callee, ds, args) => 
+        (callee, ds, args) =>
             t.isMemberExpression(callee) ?
                 apply(callee.object, toComputedProperty(callee), ds, args) :
                 call(callee, ds, args))
@@ -127,13 +130,25 @@ function fromAST(symbols, fAST)
     const pWrap = template2(`δ(%%argument%%)`);
 
     const isWRT = node => t.isIdentifier(node) && node.name === "wrt";
+    const { toVisitorKeys } = map;
 
     return map.babel(
     {
-        Expression(map, expression)
+        Any(map, node)
         {
-            console.log("EXPRESSION!" + require("@babel/generator").default(expression).code);
-            return map(expression);
+            const updated = map(node);
+            const fields = Array.isArray(node) ?
+                node :
+                toVisitorKeys(node).map(field => updated[field]);
+
+            fields.map(node => node && node[derived].wrt &&
+                fail.syntax(
+                    "wrt[] can only be used in the call or argument position."));
+
+            if (!Array.isArray(node))
+                console.log("EXPRESSION!" + require("@babel/generator").default(node).code);
+
+            return updated;
         },
 
         CallExpression(map, expression)
@@ -157,7 +172,7 @@ function fromAST(symbols, fAST)
                 map(expression);
         }
     }, fAST);
-    
+
     /*
         BinaryExpression,
         CallExpression,
