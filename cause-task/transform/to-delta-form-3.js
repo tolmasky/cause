@@ -15,6 +15,8 @@ const has = (({ hasOwnProperty }) =>
     (key, object) => hasOwnProperty.call(object, key))
     (Object);
 
+const map = require("./map");
+
 const δ = require("@cause/task/δ");
 
 const derived = Symbol("Derived");
@@ -36,8 +38,7 @@ module.exports = function (...args)
         [...explicitSymbols, ...implicitSymbols].map(key => [key, true]);
     const symbolSet = Object.fromEntries(symbolEntries);
 
-    const [type, transformed] = fromAST(symbolSet, fExpression);
-
+    const transformed = fromAST(symbolSet, fExpression);
     const parameters = Object.keys(free || { });
     // const missing = scope.free.subtract(parameters);
 
@@ -127,42 +128,35 @@ function fromAST(symbols, fAST)
 
     const isWRT = node => t.isIdentifier(node) && node.name === "wrt";
 
-    return babelMapAccum(Type, babelMapAccum.fromDefinitions(
+    return map.babel(
     {
-        Expression(mapAccum, expression)
+        Expression(map, expression)
         {
             console.log("EXPRESSION!" + require("@babel/generator").default(expression).code);
-            return mapAccum.fallback(mapAccum, expression);
+            return map(expression);
         },
 
-        CallExpression(mapAccum, expression)
+        CallExpression(map, expression)
         {
-            const [_, callee] = mapAccum(expression.callee);
-            const [__, args] = mapAccum(expression.arguments);
+            const callee = map(expression.callee);
+            const args = map(expression.arguments);
             const ds = args.flatMap((argument, index) =>
                 argument[derived].wrt ? [index] : []);
 
-            if (ds.length > 0)
-                return [Type.Value, tδ(callee, ds, args)];
-
-            return [Type.Value, t.CallExpression(callee, args)];
+            return ds.length > 0 ?
+                tδ(callee, ds, args) :
+                t.CallExpression(callee, args);
         },
-        
-        MemberExpression(mapAccum, expression)
+
+        MemberExpression(map, expression)
         {
-            if (t.isIdentifier(expression.object, { name: "wrt" }) &&
-                expression.computed)
-            {
-                const { property } = expression;
+            const { object, property, computed } = expression;
 
-                property[derived] = Derived({ wrt: true });
-    
-                return [Type.fToState, property];
-            }
-
-            return mapAccum.fallback(mapAccum, expression);
+            return computed && t.isIdentifier(object, { name: "wrt" }) ?
+                { ...property, [derived]: Derived({ wrt: true }) } :
+                map(expression);
         }
-    }))(fAST);
+    }, fAST);
     
     /*
         BinaryExpression,
