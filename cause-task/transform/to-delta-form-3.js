@@ -22,11 +22,16 @@ const fail = Object.assign(
 
 const δ = require("@cause/task/δ");
 
-const derived = Symbol("Derived");
+const derived = (symbol => (node, ...args) =>
+    args.length <= 0 ?
+        node[symbol] || Derived.Default :
+        (node[symbol] = Derived(args[0]), node))
+    (Symbol("Derived"));
 
 const Derived = data `Derived` (
     wrt     => boolean );
-Object.prototype[derived] = Derived({ wrt: false });
+
+Derived.Default = Derived({ wrt: false });
 
 module.exports = function (...args)
 {
@@ -141,7 +146,7 @@ function fromAST(symbols, fAST)
                 node :
                 toVisitorKeys(node).map(field => updated[field]);
 
-            fields.map(node => node && node[derived].wrt &&
+            fields.map(node => node && derived(node).wrt &&
                 fail.syntax(
                     "wrt[] can only be used in the call or argument position."));
 
@@ -156,7 +161,7 @@ function fromAST(symbols, fAST)
             const callee = map(expression.callee);
             const args = map(expression.arguments);
             const ds = args.flatMap((argument, index) =>
-                argument[derived].wrt ? [index] : []);
+                derived(argument).wrt ? [index] : []);
 
             return ds.length > 0 ?
                 tδ(callee, ds, args) :
@@ -168,7 +173,7 @@ function fromAST(symbols, fAST)
             const { object, property, computed } = expression;
 
             return computed && t.isIdentifier(object, { name: "wrt" }) ?
-                { ...property, [derived]: Derived({ wrt: true }) } :
+                derived(property, { wrt: true }) :
                 map(expression);
         }
     }, fAST);
