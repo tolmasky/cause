@@ -32,7 +32,7 @@ module.exports.babel = function babel(definitions, node)
         return index >= 0 ?
             definitions[aliases[index]](next =>
                 map(node === next ? index : -1, next),
-                node) :
+                node, fallback) :
             fallback(next =>
                 node === next ? fail(next) : map(-1, next), node);
     }, -1, node);
@@ -47,7 +47,7 @@ function fallback(map, node)
 
         return changed ? updated : node;
     }
-    
+
     const fields = toVisitorKeys(node);
     const modified = fields
         .map(field => [field, node[field]])

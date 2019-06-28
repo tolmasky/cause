@@ -139,21 +139,29 @@ function fromAST(symbols, fAST)
 
     return map.babel(
     {
-        Any(map, node)
+        Any,
+
+        Statement(map, { type })
         {
-            const updated = map(node);
-            const fields = Array.isArray(node) ?
-                node :
-                toVisitorKeys(node).map(field => updated[field]);
+            const name = type
+                .replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
 
-            fields.map(node => node && derived(node).wrt &&
-                fail.syntax(
-                    "wrt[] can only be used in the call or argument position."));
+            throw SyntaxError(`${name}s are not allowed in concurrent functions`);
+        },
 
-            if (!Array.isArray(node))
-                console.log("EXPRESSION!" + require("@babel/generator").default(node).code);
+        BlockStatement(map, block, fallback)
+        {
+            return Any(map, block, fallback);
+        },
 
-            return updated;
+        VariableDeclaration(map, block, fallback)
+        {
+            return Any(map, block, fallback);
+        },
+
+        ReturnStatement(map, block, fallback)
+        {
+            return Any(map, block, fallback);
         },
 
         CallExpression(map, expression)
@@ -177,6 +185,23 @@ function fromAST(symbols, fAST)
                 map(expression);
         }
     }, fAST);
+
+    function Any(map, node, fallback)
+    {
+        const updated = fallback(map, node);
+        const fields = Array.isArray(node) ?
+            node :
+            toVisitorKeys(node).map(field => updated[field]);
+
+        fields.map(node => node && derived(node).wrt &&
+            fail.syntax(
+                "wrt[] can only be used in the call or argument position."));
+
+        if (!Array.isArray(node))
+            console.log("EXPRESSION!" + require("@babel/generator").default(node).code);
+
+        return updated;
+    };
 
     /*
         BinaryExpression,
