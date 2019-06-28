@@ -22,16 +22,19 @@ const fail = Object.assign(
 
 const δ = require("@cause/task/δ");
 
-const derived = (symbol => (node, ...args) =>
-    args.length <= 0 ?
-        node[symbol] || Derived.Default :
-        (node[symbol] = Derived(args[0]), node))
-    (Symbol("Derived"));
+const [getDerived, withDerived] = (symbol =>
+[
+    node => node && node[symbol] || Derived.Default,
+    (node, values) => {
+        if (node.the_Same_one) throw Error("NOT EXPECTED");
+        return (node[symbol] = Derived({ ...node[symbol], ...values }), node) }
+])(Symbol("Derived"));
 
 const Derived = data `Derived` (
-    wrt     => boolean );
+    wrt     => [boolean, false],
+    scope   => [Scope, Scope.identity]);
 
-Derived.Default = Derived({ wrt: false });
+Derived.Default = Derived({ });
 
 module.exports = function (...args)
 {
@@ -48,6 +51,8 @@ module.exports = function (...args)
 
     const transformed = fromAST(symbolSet, fExpression);
     const parameters = Object.keys(free || { });
+
+    console.log(getDerived(transformed));
     // const missing = scope.free.subtract(parameters);
 
 //    if (missing.size > 0)
@@ -141,19 +146,30 @@ function fromAST(symbols, fAST)
     {
         Any(map, node)
         {
-            const updated = map.children(node);
+            const withUpdatedChildren = map.children(node);
             const fields = Array.isArray(node) ?
-                node :
-                toVisitorKeys(node).map(field => updated[field]);
+                withUpdatedChildren :
+                toVisitorKeys(node).map(field => withUpdatedChildren[field]);
+            const invalidWRT =
+                !t.isCallExpression(node) &&
+                fields.find(node => node && getDerived(node).wrt);
 
-            fields.map(node => node && derived(node).wrt &&
-                fail.syntax(
-                    "wrt[] can only be used in the call or argument position."));
+            // FIXME: When we're in parameters, node is Array, not CallExpression.
+//            if (invalidWRT)
+//                return fail.syntax(
+//                    `wrt[${generate(invalidWRT).code}] can only be used in ` +
+//                    `the call or argument position.`);
 
-            if (!Array.isArray(node))
-                console.log("EXPRESSION!" + require("@babel/generator").default(node).code);
+            const scope = fields
+                .map(field => getDerived(field).scope)
+                .reduce(Scope.concat, Scope.identity);
 
-            return updated;
+            return withDerived(withUpdatedChildren, { scope });
+        },
+
+        Identifier(map, node)
+        {
+            return withDerived(node, { scope: Scope.fromFree(node.name) });
         },
 
         Statement(map, { type })
@@ -165,39 +181,46 @@ function fromAST(symbols, fAST)
         },
 
         BlockStatement(map, block)
+        {//console.log("CALLING ON BLOCK");
+            return map.as("Node", block);
+        },
+
+        ReturnStatement(map, block)
         {
             return map.as("Node", block);
         },
 
-        VariableDeclaration(map, block, fallback)
+        VariableDeclaration(map, declaration)
         {
-            return map.as("Node", block);
-        },
+            if (declaration.kind !== "const")
+                return fail.syntax(
+                    `Only const declarations are allowed in concurrent functions`);
 
-        ReturnStatement(map, block, fallback)
-        {
-            return map.as("Node", block);
+            return map.as("Node", declaration);
         },
 
         CallExpression(map, expression)
         {
-            const callee = map(expression.callee);
-            const args = map(expression.arguments);
-            const ds = args.flatMap((argument, index) =>
-                derived(argument).wrt ? [index] : []);
-
-            return ds.length > 0 ?
+            const withUpdatedChildren = map.as("Any", expression);
+            const { callee, arguments: args } = withUpdatedChildren;
+            const ds = args
+                .flatMap((argument, index) =>
+                    getDerived(argument).wrt ? [index] : []);
+            const updated = ds.length > 0 ?
                 tδ(callee, ds, args) :
                 t.CallExpression(callee, args);
+//console.log(getDerived(withUpdatedChildren));
+            return withDerived(updated, getDerived(withUpdatedChildren));
         },
 
         MemberExpression(map, expression)
         {
-            const { object, property, computed } = expression;
+            const withUpdatedChildren = map.as("Expression", expression);
+            const { computed, object, property } = withUpdatedChildren;
 
             return computed && t.isIdentifier(object, { name: "wrt" }) ?
-                derived(property, { wrt: true }) :
-                map.as("Expression", expression);
+                withDerived(property, { wrt: true }) :
+                withUpdatedChildren;
         }
     }, fAST);
 
