@@ -37,7 +37,8 @@ module.exports = function treeMap(definitions, node, toUnique = true)
 
 const toUniquelyTyped = (function ()
 {
-    const { IdentifierPattern } = require("./unique-types").unique;
+    const { IdentifierExpression, IdentifierPattern } =
+        require("./unique-types").unique;
     const toPattern = node => t.isIdentifier(node) ?
         IdentifierPattern({ name: node.name }) : node;
     const toPatternProperty = property => property.computed ?
@@ -54,6 +55,13 @@ const toUniquelyTyped = (function ()
     {
         return map(
         {
+            Identifier: (map, { name }) => { console.log("FOR " + name); return IdentifierExpression({ name }) },
+            MemberExpression: (map, expression) => (updated =>
+                updated.computed ?
+                    updated :
+                    { ...updated, property: expression.property })
+            (map.as("Node", expression)),
+
             CatchClause: then("Node", toPatternKeys(["param"])),
             Function: then("Node", toPatternKeys(["id", "params"])),
             VariableDeclarator: then("Node", toPatternKeys(["id"])),
@@ -76,7 +84,7 @@ function fallback(map, node)
         return changed ? updated : node;
     }
 
-    const fields = toVisitorKeys(node);
+    const fields = types.children[node.type];
     const modified = fields
         .map(field => [field, node[field]])
         .map(([field, node]) => [field, node, node && map(node)])
@@ -102,7 +110,7 @@ const toVisitorKeys = (function ()
     };
 
     return function toVisitorKeys(node)
-    {
+    {return fields[node.type];
         const hasNonReferenceIdentifier =
             t.isVariableDeclarator(node) && t.isIdentifier(node.id) ||
             t.isMemberExpression(node) && !node.computed ||

@@ -169,11 +169,6 @@ function fromAST(symbols, fAST)
             return withDerived(withUpdatedChildren, { scope });
         },
 
-        Identifier(map, node)
-        {
-            return withDerived(node, { scope: Scope.fromFree(node.name) });
-        },
-
         Statement(map, { type })
         {
             const name = type
@@ -200,6 +195,11 @@ function fromAST(symbols, fAST)
         ReturnStatement(map, block)
         {
             return map.as("Node", block);
+        },
+
+        IdentifierExpression(map, node)
+        {console.log("IDENTIFIER EXPRESSION! " + node.name);
+            return withDerived(node, { scope: Scope.fromFree(node.name) });
         },
 
         IdentifierPattern(map, pattern)
@@ -234,8 +234,11 @@ function fromAST(symbols, fAST)
         {
             const withUpdatedChildren = map.as("Expression", expression);
             const { computed, object, property } = withUpdatedChildren;
+            const isWRT = computed &&
+                object.type === "IdentifierExpression" &&
+                object.name === "wrt";
 
-            return computed && t.isIdentifier(object, { name: "wrt" }) ?
+            return isWRT ?
                 withDerived(property, { wrt: true }) :
                 withUpdatedChildren;
         }
