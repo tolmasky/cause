@@ -146,7 +146,9 @@ function fromAST(symbols, fAST)
         name.replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
     const forbid = (...names) => Object.fromEntries(names
         .map(name => [name, () => fail.syntax(
-            `${vernacular(name)}s are not allowed in concurrent functions`)]));
+            `${vernacular(name)}s are not allowed in concurrent functions.`)]));
+    const bindName = (map, node) =>
+        withDerived(node, { scope: Scope.fromBound(node.name) });
 
     // Block clears bound.
 
@@ -168,16 +170,6 @@ function fromAST(symbols, fAST)
             const fields = Array.isArray(node) ?
                 withUpdatedChildren :
                 children[node.type].map(field => withUpdatedChildren[field]);
-            const invalidWRT =
-                !t.isCallExpression(node) &&
-                fields.find(node => node && getDerived(node).wrt);
-
-            // FIXME: When we're in parameters, node is Array, not CallExpression.
-//            if (invalidWRT)
-//                return fail.syntax(
-//                    `wrt[${generate(invalidWRT).code}] can only be used in ` +
-//                    `the call or argument position.`);
-
             const scope = fields
                 .map(field => getDerived(field).scope)
                 .reduce(Scope.concat, Scope.identity);
@@ -244,6 +236,17 @@ function fromAST(symbols, fAST)
     }, fAST);
 
 
+/*
+            const invalidWRT =
+                !t.isCallExpression(node) &&
+                fields.find(node => node && getDerived(node).wrt);
+
+            // FIXME: When we're in parameters, node is Array, not CallExpression.
+            if (invalidWRT)
+                return fail.syntax(
+                    `wrt[${generate(invalidWRT).code}] can only be used in ` +
+                    `the call or argument position.`);
+*/
 
     /*
         BinaryExpression,

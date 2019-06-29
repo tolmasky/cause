@@ -61,6 +61,8 @@ const toUniquelyTyped = (function ()
                     updated :
                     { ...updated, property: expression.property })
             (map.as("Node", expression)),
+            RestElement: (map, restElement) =>
+                ({ ...restElement, argument: toPattern(restElement.argument) }),
 
             CatchClause: then("Node", toPatternKeys(["param"])),
             Function: then("Node", toPatternKeys(["id", "params"])),
