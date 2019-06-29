@@ -141,6 +141,9 @@ function fromAST(symbols, fAST)
     const isWRT = node => t.isIdentifier(node) && node.name === "wrt";
     const { toVisitorKeys } = map;
 
+    // Block clears bound.
+    
+
     return map(
     {
         Any(map, node)

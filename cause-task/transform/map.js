@@ -42,23 +42,24 @@ const toUniquelyTyped = (function ()
         IdentifierPattern({ name: node.name }) : node;
     const toPatternProperty = property => property.computed ?
         property : { ...property, value: toPattern(property.value) };
-    const toPatternKeys = keys => (map, node) => map.as("Node",
+    const toPatternKeys = keys => (map, node) =>
         ({ ...node, ...Object.fromEntries(keys
             .map(key => [key, node[key]])
             .map(([key, value]) =>
                 [key, Array.isArray(value) ?
-                    value.map(toPattern) : toPattern(value)])) }));
+                    value.map(toPattern) : toPattern(value)])) });
+    const then = (type, f) => (map, node) => map.as(type, f(map, node))
 
     return function toUniquelyTyped(map, node)
     {
         return map(
         {
-            CatchClause: toPatternKeys(["param"]),
-            Function: toPatternKeys(["id", "params"]),
-            VariableDeclarator: toPatternKeys(["id"]),
+            CatchClause: then("Node", toPatternKeys(["param"])),
+            Function: then("Node", toPatternKeys(["id", "params"])),
+            VariableDeclarator: then("Node", toPatternKeys(["id"])),
 
-            ArrayPattern: toPatternKeys(["elements"]),
-            ObjectPattern: (map, { properties, ...rest }) => map.as("Node",
+            ArrayPattern: then("Node", toPatternKeys(["elements"])),
+            ObjectPattern: then("Node", (map, { properties, ...rest }) =>
                 ({ ...rest, properties: properties.map(toPatternProperty) }))
         }, node, false);
     }
