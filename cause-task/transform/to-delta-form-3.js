@@ -142,11 +142,26 @@ function fromAST(symbols, fAST)
     const isWRT = node => t.isIdentifier(node) && node.name === "wrt";
     const { toVisitorKeys } = map;
 
+    const vernacular = name =>
+        name.replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
+    const forbid = (...names) => Object.fromEntries(names
+        .map(name => [name, () => fail.syntax(
+            `${vernacular(name)}s are not allowed in concurrent functions`)]));
+
     // Block clears bound.
-    
+
 
     return map(
     {
+        ...forbid(
+            "AssignmentExpression",
+            "DoWhileStatement",
+            "ForStatement",
+            "ForInStatement",
+            "ForOfStatement",
+            "WhileStatement",
+            "SwitchStatement"),
+
         Any(map, node)
         {
             const withUpdatedChildren = map.children(node);
@@ -169,19 +184,6 @@ function fromAST(symbols, fAST)
 
             return withDerived(withUpdatedChildren, { scope });
         },
-/*
-        Statement(map, { type })
-        {
-            const name = type
-                .replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
-
-            throw SyntaxError(`${name}s are not allowed in concurrent functions`);
-        },
-*/
-        ExpressionStatement (map, block)
-        {
-            return map.as("Node", block);
-        },
 
         TryStatement (map, statement)
         {
@@ -192,16 +194,6 @@ function fromAST(symbols, fAST)
             const scope = Scope({ free });
 
             return withDerived(updated, { scope });
-        },
-
-        BlockStatement(map, block)
-        {//console.log("CALLING ON BLOCK");
-            return map.as("Node", block);
-        },
-
-        ReturnStatement(map, block)
-        {
-            return map.as("Node", block);
         },
 
         IdentifierExpression(map, node)
