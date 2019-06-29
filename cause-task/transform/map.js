@@ -52,8 +52,8 @@ const toUniquelyTyped = (function ()
         return map(
         {
             VariableDeclarator: toPatternKeys(["id"]),
-            Function: toPatternKeys(["id", "params"])
-            
+            Function: toPatternKeys(["id", "params"]),
+            CatchClause: toPatternKeys(["param"])
         }, node, false);
     }
 })();

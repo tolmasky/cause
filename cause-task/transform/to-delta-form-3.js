@@ -179,6 +179,16 @@ function fromAST(symbols, fAST)
             throw SyntaxError(`${name}s are not allowed in concurrent functions`);
         },
 
+        ExpressionStatement (map, block)
+        {
+            return map.as("Node", block);
+        },
+
+        TryStatement (map, block)
+        {
+            return map.as("Node", block);
+        },
+
         BlockStatement(map, block)
         {//console.log("CALLING ON BLOCK");
             return map.as("Node", block);
