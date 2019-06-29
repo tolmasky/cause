@@ -1,5 +1,6 @@
 const { boolean } = require("@algebraic/type");
 const t = require("@babel/types");
+const { children } = require("./unique-types");
 const map = require("./map");
 const toLambdaForm = require("./to-lambda-form");
 const Scope = require("./scope");
@@ -151,7 +152,7 @@ function fromAST(symbols, fAST)
             const withUpdatedChildren = map.children(node);
             const fields = Array.isArray(node) ?
                 withUpdatedChildren :
-                toVisitorKeys(node).map(field => withUpdatedChildren[field]);
+                children[node.type].map(field => withUpdatedChildren[field]);
             const invalidWRT =
                 !t.isCallExpression(node) &&
                 fields.find(node => node && getDerived(node).wrt);

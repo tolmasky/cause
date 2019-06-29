@@ -55,7 +55,7 @@ const toUniquelyTyped = (function ()
     {
         return map(
         {
-            Identifier: (map, { name }) => { console.log("FOR " + name); return IdentifierExpression({ name }) },
+            Identifier: (map, { name }) => IdentifierExpression({ name }),
             MemberExpression: (map, expression) => (updated =>
                 updated.computed ?
                     updated :
@@ -97,29 +97,3 @@ function fallback(map, node)
 //console.log("OWN SYMBOLS: " + Object.getOwnPropertySymbols(node));
     return newNode;
 }
-
-const toVisitorKeys = (function ()
-{
-    const fields = t.VISITOR_KEYS;
-    const withold = target => field => field !== target;
-    const fieldsWitholdingNonReferenceIdentifiers =
-    {
-        MemberExpression: fields.MemberExpression.filter(withold("property")),
-        ObjectProperty: fields.ObjectProperty.filter(withold("key")),
-        VariableDeclarator: fields.VariableDeclarator.filter(withold("id"))
-    };
-
-    return function toVisitorKeys(node)
-    {return fields[node.type];
-        const hasNonReferenceIdentifier =
-            t.isVariableDeclarator(node) && t.isIdentifier(node.id) ||
-            t.isMemberExpression(node) && !node.computed ||
-            t.isObjectProperty(node) && !node.computed;
-
-        return  hasNonReferenceIdentifier ?
-                fieldsWitholdingNonReferenceIdentifiers[node.type] :
-                fields[node.type] || [];
-    }
-})();
-
-module.exports.toVisitorKeys = toVisitorKeys;
