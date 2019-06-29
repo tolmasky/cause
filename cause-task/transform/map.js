@@ -38,16 +38,18 @@ module.exports = function treeMap(definitions, node, toUnique = true)
 const toUniquelyTyped = (function ()
 {
     const { IdentifierPattern } = require("./unique-types").unique;
-    const toIdentifierPattern = ({ id }) =>
-        IdentifierPattern({ name: id.name });
+    const toPattern = node => t.isIdentifier(node) ?
+        IdentifierPattern({ name: node.name }) : node;
 
     return function toUniquelyTyped(map, node)
     {
         return map(
         {
-            VariableDeclarator: (map, node) =>
-                map.as("Node", t.isIdentifier(node.id) ?
-                    { ...node, id: toIdentifierPattern(node) } : node)
+            VariableDeclarator: (map, { id, ...rest }) =>
+                map.as("Node", { ...rest, id: toPattern(id) }),
+
+            Function: (map, { id, params, ...rest }) => map.as("Node",
+                { ...rest, params: params.map(toPattern), id: toPattern(id) })
         }, node, false);
     }
 })();
