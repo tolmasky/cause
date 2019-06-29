@@ -168,7 +168,7 @@ function fromAST(symbols, fAST)
 
             return withDerived(withUpdatedChildren, { scope });
         },
-
+/*
         Statement(map, { type })
         {
             const name = type
@@ -176,15 +176,21 @@ function fromAST(symbols, fAST)
 
             throw SyntaxError(`${name}s are not allowed in concurrent functions`);
         },
-
+*/
         ExpressionStatement (map, block)
         {
             return map.as("Node", block);
         },
 
-        TryStatement (map, block)
+        TryStatement (map, statement)
         {
-            return map.as("Node", block);
+            const updated = map.as("Statement", statement);
+            const free = ["block", "handler", "finalizer"]
+                .map(key => getDerived(updated[key]).scope.free)
+                .reduce((lhs, rhs) => lhs.concat(rhs));
+            const scope = Scope({ free });
+
+            return withDerived(updated, { scope });
         },
 
         BlockStatement(map, block)
@@ -198,7 +204,7 @@ function fromAST(symbols, fAST)
         },
 
         IdentifierExpression(map, node)
-        {console.log("IDENTIFIER EXPRESSION! " + node.name);
+        {
             return withDerived(node, { scope: Scope.fromFree(node.name) });
         },
 

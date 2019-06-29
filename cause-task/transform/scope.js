@@ -7,13 +7,20 @@ const Scope = data `Scope` (
     bound   => [StringSet, StringSet()] );
 
 Scope.identity = Scope({ });
-Scope.concat = (lhs, rhs) =>
+Scope.concat = /*(...scopes) =>
+    scopes.reduce(concat, Scope.identity);
+
+const concat = */(lhs, rhs) =>
     lhs === Scope.Identity ? rhs :
     rhs === Scope.Identity ? lhs :
         ((bound =>
             Scope({ bound, free: lhs.free.union(rhs.free).subtract(bound) })))
         (lhs.bound.union(rhs.bound));
+
+
+
 Scope.fromFree = variable => Scope({ free: StringSet([variable]) });
 Scope.fromBound = variable => Scope({ bound: StringSet([variable]) });
 
 module.exports = Scope;
+
