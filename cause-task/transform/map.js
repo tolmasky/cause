@@ -51,6 +51,7 @@ const toUniquelyTyped = (function ()
     {
         return map(
         {
+            ArrayPattern: toPatternKeys(["elements"]),
             VariableDeclarator: toPatternKeys(["id"]),
             Function: toPatternKeys(["id", "params"]),
             CatchClause: toPatternKeys(["param"])
