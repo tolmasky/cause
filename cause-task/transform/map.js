@@ -66,6 +66,7 @@ const toUniquelyTyped = (function ()
             Function: then("Node", toPatternKeys(["id", "params"])),
             VariableDeclarator: then("Node", toPatternKeys(["id"])),
 
+            AssignmentPattern: then("Node", toPatternKeys(["left"])),
             ArrayPattern: then("Node", toPatternKeys(["elements"])),
             ObjectPattern: (map, pattern) => ({ ...pattern,
                 properties: pattern.properties
