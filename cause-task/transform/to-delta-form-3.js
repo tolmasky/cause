@@ -157,10 +157,15 @@ function fromAST(symbols, fAST)
     {
         ...forbid(
             "AssignmentExpression",
+            "BreakStatement",
+            "ClassDeclaration",
+            "ContinueStatement",
             "DoWhileStatement",
             "ForStatement",
             "ForInStatement",
             "ForOfStatement",
+            "LabeledStatement",
+            "WithStatement",
             "WhileStatement",
             "SwitchStatement"),
 
@@ -177,15 +182,60 @@ function fromAST(symbols, fAST)
             return withDerived(withUpdatedChildren, { scope });
         },
 
-        TryStatement (map, statement)
+        BlockStatement(map, statement)
         {
-            const updated = map.as("Statement", statement);
-            const free = ["block", "handler", "finalizer"]
-                .map(key => getDerived(updated[key]).scope.free)
-                .reduce((lhs, rhs) => lhs.concat(rhs));
-            const scope = Scope({ free });
+            const statements = map.children(statement.body);
+            const scope = statements
+                .map(statement => [statement, getDerived(statement)])
+                .map(([statement, derived]) =>
+                    // Block statements can only add to our free variables given
+                    // our NO-VAR-SCOPE ASSUMPTION.
+                    t.isBlockStatement(statement) ?
+                        Scope.justFree(derived.scope) :
+
+                    // Function declarations add to our free variables, but bind
+                    // their names.
+                    t.isFunctionDeclaration(statement) ?
+                        Scope.concat(
+                            Scope.justFree(derived.scope),
+                            Scope.fromBound(statement.id.name)) :
+
+                    // Everything else should be handled automatically, namely,
+                    // VariableDeclarations expose their bound and contribute
+                    // free variables.
+                    derived.scope)
+                .reduce(Scope.concat, Scope.identity);
+            const updated = t.BlockStatement(statements);
 
             return withDerived(updated, { scope });
+        },
+
+        Statement (map, statement)
+        {
+            // This serves as a fallback for most statement types, which may
+            // contain several scopes, like in the case of IfStatements with
+            // a consequent and possible alternate, or TryStatements with
+            // with block, handler, and finalizer.
+            //
+            // However, under the NO-VAR-SCOPE ASSUMPTION, none of these scopes
+            // can influence eachother's bound variables, and they expose no
+            // new bindings to their surroundings (except for VariableDeclaration,
+            // which is not handled in this fallback).
+            const updated = map.children(statement);
+            const scope = children[statement.type]
+                .map(key => Scope.justFree(getDerived(updated[key]).scope))
+                .reduce(Scope.concat, Scope.identity);
+
+            return withDerived(updated, { scope });
+        },
+
+        VariableDeclaration(map, declaration)
+        {
+            if (declaration.kind !== "const")
+                return fail.syntax(
+                    `Only const declarations are allowed in concurrent functions`);
+
+            return map.as("Node", declaration);
         },
 
         IdentifierExpression(map, node)
@@ -196,15 +246,6 @@ function fromAST(symbols, fAST)
         IdentifierPattern(map, pattern)
         {
             return withDerived(pattern, { scope: Scope.fromBound(pattern.name) });
-        },
-
-        VariableDeclaration(map, declaration)
-        {
-            if (declaration.kind !== "const")
-                return fail.syntax(
-                    `Only const declarations are allowed in concurrent functions`);
-
-            return map.as("Node", declaration);
         },
 
         CallExpression(map, expression)

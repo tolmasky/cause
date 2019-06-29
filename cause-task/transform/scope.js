@@ -7,10 +7,7 @@ const Scope = data `Scope` (
     bound   => [StringSet, StringSet()] );
 
 Scope.identity = Scope({ });
-Scope.concat = /*(...scopes) =>
-    scopes.reduce(concat, Scope.identity);
-
-const concat = */(lhs, rhs) =>
+Scope.concat = (lhs, rhs) =>
     lhs === Scope.Identity ? rhs :
     rhs === Scope.Identity ? lhs :
         ((bound =>
@@ -19,6 +16,7 @@ const concat = */(lhs, rhs) =>
 
 
 
+Scope.justFree = scope => Scope({ free: scope.free });
 Scope.fromFree = variable => Scope({ free: StringSet([variable]) });
 Scope.fromBound = variable => Scope({ bound: StringSet([variable]) });
 
