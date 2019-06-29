@@ -40,16 +40,20 @@ const toUniquelyTyped = (function ()
     const { IdentifierPattern } = require("./unique-types").unique;
     const toPattern = node => t.isIdentifier(node) ?
         IdentifierPattern({ name: node.name }) : node;
+    const toPatternKeys = keys => (map, node) => map.as("Node",
+        ({ ...node, ...Object.fromEntries(keys
+            .map(key => [key, node[key]])
+            .map(([key, value]) =>
+                [key, Array.isArray(value) ?
+                    value.map(toPattern) : toPattern(value)])) }));
 
     return function toUniquelyTyped(map, node)
     {
         return map(
         {
-            VariableDeclarator: (map, { id, ...rest }) =>
-                map.as("Node", { ...rest, id: toPattern(id) }),
-
-            Function: (map, { id, params, ...rest }) => map.as("Node",
-                { ...rest, params: params.map(toPattern), id: toPattern(id) })
+            VariableDeclarator: toPatternKeys(["id"]),
+            Function: toPatternKeys(["id", "params"])
+            
         }, node, false);
     }
 })();
