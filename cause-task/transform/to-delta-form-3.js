@@ -1,5 +1,6 @@
 const { boolean } = require("@algebraic/type");
 const t = require("@babel/types");
+const map = require("./map");
 const toLambdaForm = require("./to-lambda-form");
 const Scope = require("./scope");
 const transformScope = require("./transform-scope");
@@ -14,8 +15,6 @@ const wrap = require("@cause/task/wrap");
 const has = (({ hasOwnProperty }) =>
     (key, object) => hasOwnProperty.call(object, key))
     (Object);
-
-const map = require("./map");
 const fail = Object.assign(
     (Error, message) => { throw Error(message); },
     { syntax: message => fail(SyntaxError, message) });
@@ -142,7 +141,7 @@ function fromAST(symbols, fAST)
     const isWRT = node => t.isIdentifier(node) && node.name === "wrt";
     const { toVisitorKeys } = map;
 
-    return map.babel(
+    return map(
     {
         Any(map, node)
         {
@@ -188,6 +187,11 @@ function fromAST(symbols, fAST)
         ReturnStatement(map, block)
         {
             return map.as("Node", block);
+        },
+
+        IdentifierPattern(map, pattern)
+        {
+            return withDerived(pattern, { scope: Scope.fromBound(pattern.name) });
         },
 
         VariableDeclaration(map, declaration)

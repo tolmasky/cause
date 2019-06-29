@@ -1,27 +1,16 @@
-module.exports = map_;
-
-function map_(f, ...rest)
-{
-    const map = (...args) => f(map, ...args);
-
-    return map(...rest);
-}
-
 const t = require("@babel/types");
-const aliasesForTypes = Object.fromEntries(
-    [["Array", ["Array", "Any"]], ...Object.keys(t)
-        .filter(key => key.match(/^[A-Z].*[a-z]$/))
-        .map(key => [key, t.ALIAS_KEYS[key] || []])
-        .map(([key, keys]) => [key, [key, ...keys, "Node", "Any"]])]);
+const types = require("./unique-types");
+const aliasesForTypes = types.aliases
 const aliasIndexesForTypes = Object.fromEntries(Object
-    .entries(aliasesForTypes)
-    .map(([type, aliases]) => [type,
-        Object.fromEntries(aliases.map((alias, index) => [alias, index]))]));
+    .entries(types.aliases)
+    .map(([name, aliases]) =>
+        [name, Object.fromEntries(
+            aliases.map((alias, index) => [alias, index]))]));
 
 const fail = node =>
     { throw Error(`Ran out of fallback handlers for ${node.type}`); };
 
-module.exports.babel = function babel(definitions, node)
+module.exports = function treeMap(definitions, node, toUnique = true)
 {
     const as = function (as, node)
     {
@@ -34,16 +23,35 @@ module.exports.babel = function babel(definitions, node)
         const index = aliases
             .findIndex((key, index) =>
                 index >= after && definitions[key]);
-//console.log(type + " AS " + as + " " + index + " " + aliases[index]);
+
         return index >= 0 ?
             definitions[aliases[index]](map, node) :
             fallback(map, node);
     };
     const children = node => fallback(map, node);
     const map = Object.assign(node => as(void(0), node), { as, children });
+    const unique = toUnique ? toUniquelyTyped(treeMap, node) : node;
 
-    return map(node);
+    return map(unique);
 }
+
+const toUniquelyTyped = (function ()
+{
+    const { IdentifierPattern } = require("./unique-types").unique;
+    const toIdentifierPattern = ({ id }) =>
+        IdentifierPattern({ name: id.name });
+
+    return function toUniquelyTyped(map, node)
+    {
+        return map(
+        {
+            VariableDeclarator: (map, node) =>
+                map.as("Node", t.isIdentifier(node.id) ?
+                    { ...node, id: toIdentifierPattern(node) } : node)
+        }, node, false);
+    }
+})();
+
 
 function fallback(map, node)
 {
@@ -89,7 +97,7 @@ const toVisitorKeys = (function ()
 
         return  hasNonReferenceIdentifier ?
                 fieldsWitholdingNonReferenceIdentifiers[node.type] :
-                fields[node.type];
+                fields[node.type] || [];
     }
 })();
 
