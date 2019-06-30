@@ -1,84 +1,51 @@
-const t = require("@babel/types");
-const types = require("./unique-types");
-const aliasesForTypes = types.aliases
-const aliasIndexesForTypes = Object.fromEntries(Object
-    .entries(types.aliases)
-    .map(([name, aliases]) =>
-        [name, Object.fromEntries(
-            aliases.map((alias, index) => [alias, index]))]));
+const CustomNode = require("./custom-node");
 
-const fail = node =>
-    { throw Error(`Ran out of fallback handlers for ${node.type}`); };
 
-module.exports = function treeMap(definitions, node, toUnique = true)
+module.exports = function toMap(definitions)
 {
-    const as = function (as, node)
-    {
-        if (node === void(0) || node === null)
-            return node;
-
-        const type = Array.isArray(node) ? "Array" : node.type;
-        const aliases = aliasesForTypes[type];
-        const after = aliasIndexesForTypes[type][as || type];
-        const index = aliases
-            .findIndex((key, index) =>
-                index >= after && definitions[key]);
-
-        return index >= 0 ?
-            definitions[aliases[index]](map, node) :
-            fallback(map, node);
-    };
+    const as = (alias, node) =>
+        findDefinition(definitions, alias, node)(map, node);
     const children = node => fallback(map, node);
-    const map = Object.assign(node => as(void(0), node), { as, children });
-    const unique = toUnique ? toUniquelyTyped(treeMap, node) : node;
+    const fromFunctionCurried = f => fromFunction(map, f);
+    const map = node => as(false, node);
 
-    return map(unique);
+    return Object.assign(map,
+        { as, children, function: fromFunctionCurried });
 }
 
-const toUniquelyTyped = (function ()
+function findDefinition(definitions, alias, node)
 {
-    const { IdentifierExpression, IdentifierPattern } =
-        require("./unique-types").unique;
-    const toPattern = node => t.isIdentifier(node) ?
-        IdentifierPattern({ name: node.name }) : node;
-    const toPatternKeys = keys => (map, node) =>
-        ({ ...node, ...Object.fromEntries(keys
-            .map(key => [key, node[key]])
-            .map(([key, value]) =>
-                [key, Array.isArray(value) ?
-                    value.map(toPattern) : toPattern(value)])) });
-    const then = (type, f) => (map, node) => map.as(type, f(map, node))
+    if (node === void(0) || node === null)
+        return (map, node) => node;
 
-    return function toUniquelyTyped(map, node)
+    const atLeast = alias === false ?
+        0 : CustomNode.indexOfAlias(alias, node);
+    const bestMatch = CustomNode.findAlias(
+        (alias, index) =>
+            index >= atLeast && definitions[alias],
+        node);
+
+    return bestMatch ? definitions[bestMatch] : fallback;
+}
+
+const fromFunction = (function ()
+{
+    const { fNamed } = require("@algebraic/type");
+    const { parseExpression } = require("@babel/parser");
+
+    return function mapFunction (map, f)
     {
-        return map(
-        {
-            Identifier: (map, { name }) => IdentifierExpression({ name }),
-            MemberExpression: (map, expression) => (updated =>
-                updated.computed ?
-                    updated :
-                    { ...updated, property: expression.property })
-            (map.as("Node", expression)),
-            RestElement: (map, restElement) =>
-                ({ ...restElement, argument: toPattern(restElement.argument) }),
+        // Need to defer calling this to not invalidate
+        // @babel/generator/lib/generators.
+        const generate = require("@babel/generator").default;
+        const fExpression = parseExpression(`(${f})`);
+        const name = fExpression.id ? [fExpression.id.name] : [];
+        const mapped = map(fExpression);console.log(mapped);
+        const code = `return ${generate(mapped).code}`;
 
-            CatchClause: then("Node", toPatternKeys(["param"])),
-            Function: then("Node", toPatternKeys(["id", "params"])),
-            VariableDeclarator: then("Node", toPatternKeys(["id"])),
-
-            AssignmentPattern: then("Node", toPatternKeys(["left"])),
-            ArrayPattern: then("Node", toPatternKeys(["elements"])),
-            ObjectPattern: (map, pattern) => ({ ...pattern,
-                properties: pattern.properties
-                    .map(property =>
-                        ({ ...property, value: toPattern(property.value) }))
-                    .map(property => [property.key, map(property)])
-                    .map(([key, property]) =>
-                        property.computed ? property : { ...property, key }) })
-        }, node, false);
+        return (new Function(code))();
     }
 })();
-
 
 function fallback(map, node)
 {
@@ -90,7 +57,7 @@ function fallback(map, node)
         return changed ? updated : node;
     }
 
-    const fields = types.children[node.type];
+    const fields = CustomNode.getTraversableFields(node);
     const modified = fields
         .map(field => [field, node[field]])
         .map(([field, node]) => [field, node, node && map(node)])
@@ -100,6 +67,6 @@ function fallback(map, node)
         node :
         modified.reduce((accum, [field, updated]) =>
             (accum[field] = updated, accum), { ...node });
-//console.log("OWN SYMBOLS: " + Object.getOwnPropertySymbols(node));
+
     return newNode;
 }

@@ -1,22 +1,24 @@
-const { data, string, fNamed } = require("@algebraic/type");
+const { type, data, string, fNamed } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 
 const Metadata = Symbol("Metadata");
+const getBuiltInType = node => Array.isArray(node) ? "Array" : node.type;
 const getMetadata = node =>
-    (node && node[Metadata] || knownMetadataForType[name]) ||
+    !node && fail.type(`Unrecognized node of ${node}`) ||
+    type.of(node)[Metadata] || builtInMetadatas[getBuiltInType(node)] ||
     fail.type(`Unrecognized node of type ${node.type}:\n${node}`);
 const toIndexMap = ordered => 
-    Object.fromEntries(ordered.map((item, index) => [index, item]));
+    Object.fromEntries(ordered.map((item, index) => [item, index]));
 const toMetadata = (aliases, traversableFields) =>
     ({ aliases, aliasIndexes: toIndexMap(aliases), traversableFields});
-const knownMetadataForType = (t => Object.fromEntries([
+const builtInMetadatas = (t => Object.fromEntries([
     ["Array", toMetadata(["Array", "Any"], [])],
     ...t.TYPES
         // Filter out "interfaces" and deprecated types.
         .filter(name => t[name] && !t.DEPRECATED_KEYS[name])
         .map(name => [name, toMetadata(
-            [name, ...((console.log(name), t.ALIAS_KEYS[name])), "Node", "Any"],
-            t.VISITOR_KEYS)]) ]))(require("@babel/types"));
+            [name, ...t.ALIAS_KEYS[name], "Node", "Any"],
+            t.VISITOR_KEYS[name])]) ]))(require("@babel/types"));
 
 
 const CustomNode = (function()
@@ -50,18 +52,19 @@ const CustomNode = (function()
     }
 })();
 
-CustomNode.traversableFields = node => getMetadata(node).traversableFields;
+CustomNode.getTraversableFields = node => getMetadata(node).traversableFields;
 
 CustomNode.findAlias = function findAlias(f, node)
 {
-    const name = Array.isArray(node) ? "Array" : node.type;
-    const { aliases, aliasIndexes } = traversableFields(node);
-    const asName = as === OwnConcreteName ? name : as;
-    const atLeast = aliasIndexes[asName];
+    const { aliases } = getMetadata(node);
     const index = aliases.findIndex(f);
 
     return index >= 0 ? aliases[index] : false;
 }
+
+CustomNode.indexOfAlias = (alias, node) =>
+    getMetadata(node).aliasIndexes[alias];
+
 
 const CodeEmission = data `CodeEmission` (
     data => string,
