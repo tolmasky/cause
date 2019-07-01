@@ -65,6 +65,10 @@ CustomNode.findAlias = function findAlias(f, node)
 CustomNode.indexOfAlias = (alias, node) =>
     getMetadata(node).aliasIndexes[alias];
 
+CustomNode.isNode = node =>
+    !!node &&
+    !Array.isArray(node) &&
+    !!(type.of(node)[Metadata] || builtInMetadatas[getBuiltInType(node)]);
 
 const CodeEmission = data `CodeEmission` (
     data => string,

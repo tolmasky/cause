@@ -2,7 +2,6 @@ const fail = require("@algebraic/type/fail");
 const t = require("@babel/types");
 const { getTraversableFields } = require("./custom-node");
 const map = require("./map");
-const disambiguateIdentifiers = require("./disambiguate-identifiers");
 const Scope = require("./scope");
 
 

@@ -1,4 +1,5 @@
 const t = require("@babel/types");
+const { isNode } = require("./custom-node");
 const { isArray } = Array;
 const { isList } = require("immutable").List;
 const { hasOwnProperty } = Object;
@@ -15,7 +16,7 @@ module.exports = function valueToExpression(value)
     if (value === null)
         return nullLiteral;
 
-    if (t.isNode(value))
+    if (isNode(value))
         return value;
 
     if (isArray(value))
