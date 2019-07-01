@@ -33,14 +33,18 @@ const fromFunction = (function ()
     const { fNamed } = require("@algebraic/type");
     const { parseExpression } = require("@babel/parser");
 
-    return function mapFunction (map, f)
+    return function mapFunction (map, f, options)
     {
+        const fExpression = parseExpression(`(${f})`);
+        const name = fExpression.id ? [fExpression.id.name] : [];
+        const mapped = map(fExpression);
+
+        if (!options || options.output !== "function")
+            return mapped;
+
         // Need to defer calling this to not invalidate
         // @babel/generator/lib/generators.
         const generate = require("@babel/generator").default;
-        const fExpression = parseExpression(`(${f})`);
-        const name = fExpression.id ? [fExpression.id.name] : [];
-        const mapped = map(fExpression);console.log(mapped);
         const code = `return ${generate(mapped).code}`;
 
         return (new Function(code))();
