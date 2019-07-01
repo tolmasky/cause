@@ -28,7 +28,7 @@ const CustomNode = (function()
 
     return ([name]) => function (fAliases, fGenerate, ...fields)
     {
-        const aliases = [fAliases(), "Node", "Any"];
+        const aliases = [name, ...fAliases(), "Node", "Any"];
         const type = data ([name]) (type => [string, name], ...fields);
 
         // Unfortunately we have to add this here or ___.

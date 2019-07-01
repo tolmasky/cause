@@ -20,5 +20,10 @@ Scope.justFree = scope => Scope({ free: scope.free });
 Scope.fromFree = variable => Scope({ free: StringSet([variable]) });
 Scope.fromBound = variable => Scope({ bound: StringSet([variable]) });
 
+const symbol = Symbol("Scope");
+
+Scope.for = node => node && node[symbol] || Scope.identity;
+Scope.with = (node, scope) => (node[symbol] = Scope(scope), node);
+
 module.exports = Scope;
 
