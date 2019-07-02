@@ -4,6 +4,9 @@ const t = require("@babel/types");
 const { getTraversableFields } = require("./custom-node");
 const map = require("./map");
 const Scope = require("./scope");
+const mapAccum = require("@climb/map-accum");
+const { IdentifierExpression, IdentifierPattern } = require("./disambiguate-identifiers");
+const partition = require("@climb/partition");
 
 
 const vernacular = name =>
@@ -60,6 +63,12 @@ const KeyPath = union `KeyPath` (
     data `Parent` (
         key     => string,
         child   => [KeyPath, KeyPath.Root] ) );
+
+const Dependencies =
+{
+    with: statement => ConvertedType.for(statement).dependencies,
+    for: (statement, dependencies) => ConvertedType.with(statement, { dependencies })
+};
 
 KeyPath.Root.prototype[Symbol.iterator] =
 KeyPath.Parent.prototype[Symbol.iterator] = function * ()
@@ -151,8 +160,11 @@ module.exports = map(
 
     BlockStatement(map, statement)
     {
-        const up = map.as("Node", statement);
+        const up = removeEmptyStatements(hoistFunctionDeclarations(map.as("Node", statement)));
         const { dependencies } = ConvertedType.for(up);
+
+        if (dependencies.size <= 0)
+            return up;
 
         const args = t.Identifier("args");
         const toMember = index =>
@@ -216,3 +228,44 @@ module.exports = map(
 });
 
 module.exports.getConvertedType = ConvertedType.for;
+
+function removeEmptyStatements(block)
+{
+    return t.BlockStatement(block
+        .body.filter(statement => !t.isEmptyStatement(statement)));
+}
+
+function hoistFunctionDeclarations(block)
+{
+    // The first step is to hoist all the function declarations to the top.
+    // Change them to const declarations to make our lives easier later.
+    const statements = block.body;
+    const [functionDeclarations, rest] =
+        partition(t.isFunctionDeclaration, statements);
+    const asVariableDeclarations = functionDeclarations
+        .map(functionDeclaration =>
+            [functionDeclaration.id.name, functionDeclaration])
+        .map(([name, functionDeclaration]) =>
+        [
+            Scope.with(IdentifierPattern({ name }), Scope.fromBound(name)),
+            toFunctionExpression(functionDeclaration)
+        ])
+        .map(([id, functionDeclaration]) =>
+            t.VariableDeclaration("const",
+                [t.VariableDeclarator(id, functionDeclaration)]));
+    const hoisted = Scope.with(
+        [...asVariableDeclarations, ...rest], Scope.for(statements));
+
+    return Scope.with(t.BlockStatement(hoisted), Scope.for(block));
+}
+
+// We have to do this tricky id business to avoid FunctionExpression getting
+// angry that we are passing an IdentifierPattern instead of an
+// IdentifierExpression as id.
+function toFunctionExpression({ id, params, body, generator, async })
+{
+    return Object.assign(
+        t.FunctionExpression(null, params, body, generator, async),
+        { id });
+}
+
