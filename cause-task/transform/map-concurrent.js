@@ -14,6 +14,8 @@ const vernacular = name =>
 const forbid = (...names) => Object.fromEntries(names
     .map(name => [name, () => fail.syntax(
         `${vernacular(name)}s are not allowed in concurrent functions.`)]));
+const unexpected = node => fail.syntax(
+    `${vernacular(node.type)}s are not allowed at this point in concurrent functions.`);
 
 
 const template = require("./template");
@@ -160,7 +162,7 @@ module.exports = map(
 
     BlockStatement(map, statement)
     {
-        const up = removeEmptyStatements(hoistFunctionDeclarations(map.as("Node", statement)));
+        const up = fromCascadingIfStatements(removeEmptyStatements(hoistFunctionDeclarations(map.as("Node", statement))));
         const { dependencies } = ConvertedType.for(up);
 
         if (dependencies.size <= 0)
@@ -228,6 +230,78 @@ module.exports = map(
 });
 
 module.exports.getConvertedType = ConvertedType.for;
+
+// Terminology: Result statements are either traditional JavaScript return
+// statements or throw statements.
+//
+// Essentially, all JavaScript functions are implicitly Either<Return, Throw>,
+// so we allow any block to end with one of these two statements.
+const isResultStatement = statement =>
+    t.isReturnStatement(statement) || t.isThrowStatement(statement);
+const tReturnIf =
+    (tReturnIf => (...args) => t.ReturnStatement(tReturnIf(...args)))
+    (template((test, consequent, alternate) =>
+        test ? (() => consequent)() : (() => alternate)()));
+
+function fromCascadingIfStatements(block)
+{
+    // We want to be in single result form:
+    // [declaration-1, declaration-2, ..., declaration-N, result]
+    //
+    // However, we *allow* intermediate if-gaurded early results, but we
+    // do so by transforming it into a single return by wrapping everything
+    // after the if-gaurd in an if-function, and return the result of it.
+    //
+    // Code of the form:
+    // [d1, d2, ..., dn, if (test) [s], s1, s2, ..., sN, result]
+    //
+    // Where:
+    // 1. d1, d2, ..., dn are consecutive declarations
+    // 2. if (test) [s] is an if statement that ends in a result.
+    // 3. s1, s2, ..., sN are either declaration or more if-gaurded early
+    //    returns.
+    //
+    // Becomes:
+    // [d1, d2, ..., fIf (test, () => [s], () => [s1, s2, ..., sN, result])]
+
+    // Start by finding the first if-gaurded early return.
+    const statements = block.body;
+    const firstIf = statements.findIndex(t.isIfStatement);
+
+    // If we have no if statements, it's pretty easy, just handle the
+    // declarations and final result.
+    if (firstIf === -1)
+        return fromDeclarationStatements(statements);
+
+    // If not, then construct the if-function to replace the tail of the
+    // statements with:
+    const { test, consequent: consequentStatement } = statements[firstIf];
+    // The consequent is now the body of an arrow function, so it has to be
+    // an expression or block statement. We expect to only have declarations
+    // and return statements, so the special case of a single return
+    // statement can folded into just it's argument.
+    const consequent =
+        t.isReturnStatement(consequentStatement) ?
+            consequentStatement.argument :
+        t.isBlockStatement(consequentStatement) ||
+        t.isThrowStatement(consequentStatement) ?
+            consequentStatement :
+            unexpected(consequentStatement);
+
+    const alternate = t.BlockStatement(statements.slice(firstIf + 1));
+    const returnIf = tReturnIf(test, consequent, alternate);
+
+    // Construct the revised statement list:
+    const singleResultForm = [...statements.slice(0, firstIf), returnIf];
+
+    // Apply the same declaration transforms we were already planning to.
+    return fromDeclarationStatements(singleResultForm);
+}
+
+function fromDeclarationStatements(statements)
+{
+    return t.BlockStatement(statements);
+}
 
 function removeEmptyStatements(block)
 {
