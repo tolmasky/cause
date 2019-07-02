@@ -79,6 +79,16 @@ KeyPath.Parent.prototype.toString = function ()
     return `[${Array.from(this).join(", ")}]`;
 }
 
+KeyPath.replace = function (replacement, keyPath, node)
+{
+    return is(KeyPath.Root, keyPath) ?
+        replacement :
+        Object.assign(Array.isArray(node) ?
+            [...node] : { ...node },
+            { [keyPath.key]: KeyPath.replace(
+                replacement, keyPath.child, node[keyPath.key]) });
+}
+
 const Dependency = data `Dependency` (
     node    => Object,
     keyPath => [KeyPath, KeyPath.Root] );
@@ -128,7 +138,8 @@ module.exports = map(
                 .map(field => [field, withUpdatedChildren[field]]);
 //console.log(children);
         const convertedType = children
-            .map(([field, child]) => ConvertedType.adopt(field + "", ConvertedType.for(child)))
+            .map(([field, child]) =>
+                ConvertedType.adopt(field + "", ConvertedType.for(child)))
             .reduce((lhs, rhs) =>
                 ConvertedType({ dependencies:
                     lhs.dependencies.concat(rhs.dependencies) }),
@@ -136,6 +147,34 @@ module.exports = map(
 //        console.log(convertedType.dependencies);
 //console.log(scope);
         return ConvertedType.with(withUpdatedChildren, convertedType);
+    },
+
+    BlockStatement(map, statement)
+    {
+        const up = map.as("Node", statement);
+        const { dependencies } = ConvertedType.for(up);
+
+        const args = t.Identifier("args");
+        const toMember = index =>
+            t.MemberExpression(args, t.numericLiteral(index), true);
+
+        const replaced = dependencies
+            // Set().reduce unfortunately just duplicates the item twice instead
+            // of providing an index.
+            .toList()
+            .reduce((node, { keyPath }, index) =>
+                KeyPath.replace(toMember(index), keyPath, node),
+                up);
+
+        const fExpression = t.ArrowFunctionExpression(
+            [t.RestElement(t.Identifier("args"))],
+            replaced);
+
+        return t.BlockStatement(
+            [t.ReturnStatement(
+                tδ_depend(false,
+                    fExpression,
+                    ...dependencies.map(({ node }) => node)))]);
     },
 
     CallExpression(map, expression)
@@ -151,7 +190,7 @@ module.exports = map(
         const convertedType = ConvertedType.for(withUpdatedChildren);
 
         if (ConvertedType.for(callee).wrt || ds.length > 0)
-        {
+        {console.log("HERE FOR " + require("@babel/generator").default(updated).code);
             const r = ConvertedType.withDependencyNode(updated, convertedType);
 
             //console.log("I NEED ", ConvertedType.for(r).dependencies.size);
@@ -164,7 +203,7 @@ module.exports = map(
 
     MemberExpression(map, expression)
     {
-        const withUpdatedChildren = map.children(expression);
+        const withUpdatedChildren = map.as("Node", expression);
         const { computed, object, property } = withUpdatedChildren;
         const isWRT = computed &&
             object.type === "IdentifierExpression" &&
