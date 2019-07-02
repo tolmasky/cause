@@ -162,7 +162,7 @@ module.exports = map(
 
     BlockStatement(map, statement)
     {
-        const up = fromCascadingIfStatements(removeEmptyStatements(hoistFunctionDeclarations(map.as("Node", statement))));
+        const up = fromBlockStatement(map.as("Node", statement));
         const { dependencies } = ConvertedType.for(up);
 
         if (dependencies.size <= 0)
@@ -231,6 +231,14 @@ module.exports = map(
 
 module.exports.getConvertedType = ConvertedType.for;
 
+function fromBlockStatement(block)
+{
+    const hoisted = hoistFunctionDeclarations(block);
+    const compressed = removeEmptyStatements(hoisted);
+
+    return fromCascadingIfStatements(compressed);
+}
+
 // Terminology: Result statements are either traditional JavaScript return
 // statements or throw statements.
 //
@@ -280,16 +288,11 @@ function fromCascadingIfStatements(block)
     // an expression or block statement. We expect to only have declarations
     // and return statements, so the special case of a single return
     // statement can folded into just it's argument.
-    const consequent =
-        t.isReturnStatement(consequentStatement) ?
-            consequentStatement.argument :
+    const consequent = fromBlockStatement(
         t.isBlockStatement(consequentStatement) ?
-            fromCascadingIfStatements(consequentStatement) :
-        t.isThrowStatement(consequentStatement) ?
-            t.BlockStatement([consequentStatement]) :
-            unexpected(consequentStatement);
-
-    const alternate = fromCascadingIfStatements(
+            consequentStatement :
+            t.BlockStatement([consequentStatement]));
+    const alternate = fromBlockStatement(
         t.BlockStatement(statements.slice(firstIf + 1)));
     const returnIf = tReturnIf(test, consequent, alternate);
 
@@ -299,6 +302,16 @@ function fromCascadingIfStatements(block)
     // Apply the same declaration transforms we were already planning to.
     return fromDeclarationStatements(singleResultForm);
 }
+
+    /*
+        t.isReturnStatement(consequentStatement) ?
+            consequentStatement.argument :
+        t.isBlockStatement(consequentStatement) ?
+            fromBlockStatement(consequentStatement) :
+        t.isThrowStatement(consequentStatement) ?
+            t.BlockStatement([consequentStatement]) :
+            unexpected(consequentStatement);
+    */
 
 function fromDeclarationStatements(statements)
 {
