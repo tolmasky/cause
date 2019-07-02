@@ -283,12 +283,14 @@ function fromCascadingIfStatements(block)
     const consequent =
         t.isReturnStatement(consequentStatement) ?
             consequentStatement.argument :
-        t.isBlockStatement(consequentStatement) ||
+        t.isBlockStatement(consequentStatement) ?
+            fromCascadingIfStatements(consequentStatement) :
         t.isThrowStatement(consequentStatement) ?
-            consequentStatement :
+            t.BlockStatement([consequentStatement]) :
             unexpected(consequentStatement);
 
-    const alternate = t.BlockStatement(statements.slice(firstIf + 1));
+    const alternate = fromCascadingIfStatements(
+        t.BlockStatement(statements.slice(firstIf + 1)));
     const returnIf = tReturnIf(test, consequent, alternate);
 
     // Construct the revised statement list:
