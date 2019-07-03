@@ -8,7 +8,6 @@ const mapAccum = require("@climb/map-accum");
 const { IdentifierExpression, IdentifierPattern } = require("./disambiguate-identifiers");
 const partition = require("@climb/partition");
 
-
 const vernacular = name =>
     name.replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
 const forbid = (...names) => Object.fromEntries(names
@@ -168,35 +167,15 @@ module.exports = map(
         return ConvertedType.with(withUpdatedChildren, convertedType);
     },
 
-    BlockStatement(map, statement)
+    Function(map, node)
     {
-        const up = fromBlockStatement(map.as("Node", statement));
-        const { dependencies } = ConvertedType.for(up);
+        const fReduced = map.as("Node", node);
+        const dependencies = Dependencies.for(fReduced);
 
         if (dependencies.size <= 0)
-            return up;
+            return fReduced;
 
-        const args = t.Identifier("args");
-        const toMember = index =>
-            t.MemberExpression(args, t.numericLiteral(index), true);
-
-        const replaced = dependencies
-            // Set().reduce unfortunately just duplicates the item twice instead
-            // of providing an index.
-            .toList()
-            .reduce((node, { keyPath }, index) =>
-                KeyPath.replace(toMember(index), keyPath, node),
-                up);
-
-        const fExpression = t.ArrowFunctionExpression(
-            [t.RestElement(t.Identifier("args"))],
-            replaced);
-
-        return t.BlockStatement(
-            [t.ReturnStatement(
-                tδ_depend(false,
-                    fExpression,
-                    ...dependencies.map(({ node }) => node)))]);
+        return { ...fReduced, body: fromBlockStatement(fReduced.body) };
     },
 
     CallExpression(map, expression)
@@ -319,7 +298,28 @@ function fromCascadingIfStatements(block)
 
 function fromDeclarationStatements(statements)
 {
-    return r.BlockStatement(statements);
+    const dependencies = Dependencies.for(statements);
+    const args = t.Identifier("args");
+    const toMember = index =>
+        t.MemberExpression(args, t.numericLiteral(index), true);
+
+    const replaced = dependencies
+        // Set().reduce unfortunately just duplicates the item twice instead
+        // of providing an index.
+        .toList()
+        .reduce((node, { keyPath }, index) =>
+            KeyPath.replace(toMember(index), keyPath, node),
+            statements);
+
+    const fExpression = r.ArrowFunctionExpression(
+        [t.RestElement(t.Identifier("args"))],
+        t.BlockStatement(replaced));
+
+    return r.BlockStatement(
+        [t.ReturnStatement(
+            tδ_depend(false,
+                fExpression,
+                ...dependencies.map(({ node }) => node)))]);
 }
 
 function removeEmptyStatements(block)
@@ -375,11 +375,15 @@ function fromDeferredOperator(operator, ...pairs)
 
 function fix(node)
 {
-    return reduce(ConvertedType, reduce(Scope, node));
+    return reduce([Scope, ConvertedType], node);
 }
 
-function reduce(M, node, field)
+function reduce(M, node)
 {
+    if (Array.isArray(M))
+        return M.reduce((node, M) =>
+            reduce(M, node), node);
+
     if (!node || M.has(node))
         return node;
 
@@ -390,7 +394,7 @@ function reduce(M, node, field)
 
     return M.with(node, children
             .map(([field, child]) =>
-                [field, M.for(reduce(M, child, field))])
+                [field, M.for(reduce(M, child))])
             .reduce((accum, [field, child]) =>
                 M.concat(accum, child, field),
                 M.identity));
