@@ -24,6 +24,7 @@ const symbol = Symbol("Scope");
 
 Scope.for = node => node && node[symbol] || Scope.identity;
 Scope.with = (node, scope) => (node[symbol] = Scope(scope), node);
+Scope.has = node => !!node[symbol];
 
 module.exports = Scope;
 

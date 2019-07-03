@@ -1,7 +1,7 @@
 const { is, data, union, boolean } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const t = require("@babel/types");
-const { getTraversableFields } = require("./custom-node");
+const { getTraversableFields, isNode } = require("./custom-node");
 const map = require("./map");
 const Scope = require("./scope");
 const mapAccum = require("@climb/map-accum");
@@ -55,7 +55,7 @@ const ConvertedType = data `ConvertedType` (
     wrt             => [boolean, false],
     dependencies    => [Set(Dependency), Set(Dependency)()],
 );
-
+Error.stackTraceLimit = 1000;
 ConvertedType.withDependencyNode = node =>
     ConvertedType.with(node,
         { dependencies: Set(Dependency)([Dependency({ node })]) });
@@ -68,9 +68,13 @@ const KeyPath = union `KeyPath` (
 
 const Dependencies =
 {
-    with: statement => ConvertedType.for(statement).dependencies,
-    for: (statement, dependencies) => ConvertedType.with(statement, { dependencies })
+    for: statement => ConvertedType.for(statement).dependencies,
+    with: (statement, dependencies) => ConvertedType.with(statement, { dependencies }),
+    has: statement => !!statement[ConvertedTypeSymbol]
 };
+
+const hasDependencies = expression =>
+    Dependencies.for(expression).size > 0;
 
 KeyPath.Root.prototype[Symbol.iterator] =
 KeyPath.Parent.prototype[Symbol.iterator] = function * ()
@@ -120,7 +124,12 @@ ConvertedType.for = node =>
 ConvertedType.with = (node, fields) =>
     (node[ConvertedTypeSymbol] = ConvertedType(fields), node);
 
-
+ConvertedType.identity = ConvertedType.Default;
+ConvertedType.concat = (lhs, rhs, field) =>
+    ConvertedType({ dependencies:
+        lhs.dependencies.concat(
+            rhs.dependencies.map(Dependency.adopt(field + ""))) });
+ConvertedType.has = node => !!node[ConvertedTypeSymbol];
 
 // at statement level?
 module.exports = map(
@@ -147,7 +156,7 @@ module.exports = map(
                 .map((child, index) => [index, child]) :
             getTraversableFields(node)
                 .map(field => [field, withUpdatedChildren[field]]);
-//console.log(children);
+
         const convertedType = children
             .map(([field, child]) =>
                 ConvertedType.adopt(field + "", ConvertedType.for(child)))
@@ -155,8 +164,7 @@ module.exports = map(
                 ConvertedType({ dependencies:
                     lhs.dependencies.concat(rhs.dependencies) }),
                 ConvertedType.Default);
-//        console.log(convertedType.dependencies);
-//console.log(scope);
+
         return ConvertedType.with(withUpdatedChildren, convertedType);
     },
 
@@ -239,6 +247,10 @@ function fromBlockStatement(block)
     return fromCascadingIfStatements(compressed);
 }
 
+const r = Object.fromEntries(t.TYPES
+    .filter(name => t[name] && !t.DEPRECATED_KEYS[name])
+    .map(name => [name, (...args) => fix(t[name](...args))]));
+
 // Terminology: Result statements are either traditional JavaScript return
 // statements or throw statements.
 //
@@ -246,10 +258,7 @@ function fromBlockStatement(block)
 // so we allow any block to end with one of these two statements.
 const isResultStatement = statement =>
     t.isReturnStatement(statement) || t.isThrowStatement(statement);
-const tReturnIf =
-    (tReturnIf => (...args) => t.ReturnStatement(tReturnIf(...args)))
-    (template((test, consequent, alternate) =>
-        test ? (() => consequent)() : (() => alternate)()));
+
 
 function fromCascadingIfStatements(block)
 {
@@ -283,44 +292,39 @@ function fromCascadingIfStatements(block)
 
     // If not, then construct the if-function to replace the tail of the
     // statements with:
-    const { test, consequent: consequentStatement } = statements[firstIf];
+    const { test, consequent } = statements[firstIf];
     // The consequent is now the body of an arrow function, so it has to be
     // an expression or block statement. We expect to only have declarations
     // and return statements, so the special case of a single return
     // statement can folded into just it's argument.
-    const consequent = fromBlockStatement(
-        t.isBlockStatement(consequentStatement) ?
-            consequentStatement :
-            t.BlockStatement([consequentStatement]));
-    const alternate = fromBlockStatement(
-        t.BlockStatement(statements.slice(firstIf + 1)));
-    const returnIf = tReturnIf(test, consequent, alternate);
+    const consequentBlock = fromBlockStatement(
+        t.isBlockStatement(consequent) ?
+            consequent : r.BlockStatement([consequent]));
+    const alternateBlock = fromBlockStatement(
+        r.BlockStatement(statements.slice(firstIf + 1)));
+    const returnIf = r.ReturnStatement(
+        fromDeferredOperator(
+            tδ_ternary,
+            [false, test],
+            [true, r.FunctionExpression(null, [], consequentBlock)],
+            [true, r.FunctionExpression(null, [], alternateBlock)]));
 
     // Construct the revised statement list:
-    const singleResultForm = [...statements.slice(0, firstIf), returnIf];
+    const singleResultForm =
+        fix([...statements.slice(0, firstIf), returnIf], true);
 
     // Apply the same declaration transforms we were already planning to.
     return fromDeclarationStatements(singleResultForm);
 }
 
-    /*
-        t.isReturnStatement(consequentStatement) ?
-            consequentStatement.argument :
-        t.isBlockStatement(consequentStatement) ?
-            fromBlockStatement(consequentStatement) :
-        t.isThrowStatement(consequentStatement) ?
-            t.BlockStatement([consequentStatement]) :
-            unexpected(consequentStatement);
-    */
-
 function fromDeclarationStatements(statements)
 {
-    return t.BlockStatement(statements);
+    return r.BlockStatement(statements);
 }
 
 function removeEmptyStatements(block)
 {
-    return t.BlockStatement(block
+    return r.BlockStatement(block
         .body.filter(statement => !t.isEmptyStatement(statement)));
 }
 
@@ -358,3 +362,106 @@ function toFunctionExpression({ id, params, body, generator, async })
         { id });
 }
 
+function fromDeferredOperator(operator, ...pairs)
+{
+    const args = pairs.map(([, argument]) => argument);
+    const ds = pairs.flatMap(([thunk, argument], index) =>
+        thunk && hasDependencies(argument) ? [index] : []);
+
+    return ds.length <= 0 ?
+        r.CallExpression(operetor, args) :
+        fix(tδ(tδ_ternary, ds, args));
+}
+
+function fix(node)
+{
+    return reduce(ConvertedType, reduce(Scope, node));
+}
+
+function reduce(M, node, field)
+{
+    if (!node || M.has(node))
+        return node;
+
+    const children = Array.isArray(node) ?
+        node.map((child, index) => [index, child]) :
+        getTraversableFields(node)
+            .map(field => [field, node[field]]);
+
+    return M.with(node, children
+            .map(([field, child]) =>
+                [field, M.for(reduce(M, child, field))])
+            .reduce((accum, [field, child]) =>
+                M.concat(accum, child, field),
+                M.identity));
+}
+/*
+function fromDeferredOperator(operator, pairs)
+{
+    const hasDependencies = expression =>
+        Dependencies.for(expression).size > 0;
+
+    return function (expression)
+    {
+        const values = pairs.map(([field, isDeferred], index) =>
+            [expression[field], isDeferred, index]);
+        const [ds, args] = mapAccum((ds, [value, isDeferred, index]) =>
+            isDeferred ?
+                [hasDependencies(value) > 0 ?
+                    ds.concat(index) : ds, t_thunk(value)] :
+                [ds, value]);
+
+        // If none do, then we are in the clear and can just return the
+        // expression unchanged.
+        if (ds.length <= 0)
+            return expression;
+
+        return tδ(tδ_ternary, ds, args);
+    }
+}
+
+function toThunk(expression
+
+    tδ(tδ_ternary, ds, args);
+
+    if (ds.length <= 0)
+    const [ds, args] = mapAccum((ds, [value, isDeferred, index]) =>
+        [hasDependencies(value) > 0 ? ds.concat(index) : ds, value]);
+    
+
+
+    const [ds, args] = mapAccum((ds, [value, isDeferred, index]) =>
+        [hasDependencies(value) > 0 ? ds.concat(index) : ds, value]);
+
+    return function (expression)
+    {
+        const values = pairs.map(([field, isDeferred], index) =>
+            [expression[field], isDeferred, index]);
+        const [ds, args] = mapAccum((ds, [value, isDeferred, index]) =>
+            [hasDependencies(value) > 0 ? ds.concat(index) : ds, value]);
+
+        // If none do, then we are in the clear and can just return the
+        // expression unchanged.
+        if (ds.length <= 0)
+            return expression;
+
+        return tδ(tδ_ternary, ds, args);
+    }
+
+        const values = pairs
+            .map(([field, isDeferred]) => [expression[field], isDeferred])
+            .map(([value, isDeferred]) =>
+                [isDeferred ? t_thunk(value) : value, isDeferred])
+            .map(([value, isDeferred]) =>
+                [isDeferred && hasDependencies ? 
+
+        pairs
+    
+        // Determine which, if any, of the deferred fields actually contains
+        // concurrent operations.
+        const ds = pairs
+            .filter(pair => pair[1])
+            .map(([field]) => [field, expression[field]])
+            .flatMap(([field, expression], index) => 
+                Dependencies.for(argument).size > 0 ? [index] : []);
+*/
