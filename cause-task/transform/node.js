@@ -1,11 +1,14 @@
-const { data, union, parameterized, primitives } = require("@algebraic/type");
+const { data, union, parameterized, primitives, tnull } = require("@algebraic/type");
 const { Optional, None } = require("@algebraic/type/optional");
 const fail = require("@algebraic/type/fail");
 
+const nullable = parameterized(T =>
+    union `nullable<${T}>` (T, tnull) );
+
 const t = require("@babel/types");
 const fromDefinition = ({ optional, validate }) =>
-   (deferred => optional ?
-        () => [Optional(deferred()), None] :
+    (deferred => optional ?
+        () => nullable(deferred()) :
         deferred)(fromValidate(validate) || (() => Object));
 const cached = f => (cache => (...args) =>
     cache[JSON.stringify(args)] ||
@@ -33,10 +36,11 @@ const concrete = Object.fromEntries(t
     .map(name => [name, data ([name]) (...Object
         .entries(t.NODE_FIELDS[name])
         .map(([name, definition]) => [name, fromDefinition(definition)])
-        .map(([name, type]) => toDeferredField(name, type)))]));
+        .map(([name, type]) => data.Field({ name, type, defaultValue: null })))]));
 const aliases = Object.fromEntries(Object
     .entries(t.FLIPPED_ALIAS_KEYS)
     .map(([name, aliases]) =>
         [name, union ([name]) (...aliases.map(name => concrete[name]))]));
 const c = concrete;
-console.log(c.FunctionExpression({ id: c.Identifier({ name: "name" }), params:[], body:c.BlockStatement([]) }));
+
+console.log(c.FunctionExpression({ id: c.Identifier({ name: "name" }), params:[], body:c.BlockStatement({ body:[], directives:[] }) }));
