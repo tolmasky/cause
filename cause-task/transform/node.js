@@ -1,4 +1,4 @@
-const { data, union, parameterized, primitives, tnull, string, getTypename } = require("@algebraic/type");
+const { is, data, union, parameterized, primitives, tnull, string, getTypename } = require("@algebraic/type");
 const { List } = require("@algebraic/collections");
 const t = require("@babel/types");
 
@@ -9,7 +9,7 @@ const Or = parameterized((...Ts) =>
         Ts[0] :
         union `Alias<${Ts.map(getTypename)}>` (...Ts));
 const valueTypes = { ...primitives, "null": tnull };
-const oneOf = validate =>
+const oneOfType = validate =>
     validate.oneOfNodeTypes ||
     validate.oneOfNodeOrValueTypes;
 
@@ -17,8 +17,10 @@ const fromValidate = validate =>
     !validate ? (() => Object) :
     validate.type && validate.type !== "array" ?
         () => primitives[validate.type] :
-    oneOf(validate) ?
-        () => Or(...oneOf(validate).map(name =>
+    validate.oneOf ?
+        (() => primitives[typeof validate.oneOf[0]]) || false :
+    oneOfType(validate) ?
+        () => Or(...oneOfType(validate).map(name =>
             valueTypes[name] || concrete[name] || aliases[name])) :
     validate.each ?
         () => List(fromValidate(validate.each)()) :
@@ -47,20 +49,27 @@ const toNodeField = function ([name, definition])
     return data.Field({ name, type: typeDeferredWrapped, defaultValue });
 }
 
-
-const concrete = Object.fromEntries(t
+const undeprecated = t
     .TYPES
-    .filter(name => t[name] && !t.DEPRECATED_KEYS[name])
-    .map(name => [name,
+    .filter(name => t[name] && !t.DEPRECATED_KEYS[name]);
+
+const concrete = Object.fromEntries(
+    undeprecated.map(name => [name,
         data ([name]) (
         type => [string, name],
         ...Object
             .entries(t.NODE_FIELDS[name])
             .map(toNodeField))]));
+
+module.exports.concrete = concrete;
+
 const aliases = Object.fromEntries(Object
-    .entries(t.FLIPPED_ALIAS_KEYS)
+    .entries({ ...t.FLIPPED_ALIAS_KEYS, Node: undeprecated })
     .map(([name, aliases]) =>
-        [name, union ([name]) (...aliases.map(name => concrete[name]))]));
+        [name, union ([name])
+            (...aliases.map(name => concrete[name]))]));
+
+module.exports.aliases = aliases;
 
 const typecasts = Object.fromEntries(Object
     .entries(concrete)
@@ -72,6 +81,7 @@ const typecasts = Object.fromEntries(Object
                 parameterized.is(Nullable, type) &&
                 parameterized.is(List, union.components(type)[1]) ?
                     type : false]))]));
+
 const builders = Object.fromEntries(Object
     .entries(concrete)
     .map(([name, type, typecast]) =>
@@ -83,10 +93,69 @@ const builders = Object.fromEntries(Object
                         typecast[key](value) : value]))))
         (t.BUILDER_KEYS[name], typecasts[name])]));
 
+module.exports.builders = builders;
+
+module.exports.upgrade = function upgrade(node)
+{
+    if (node === void(0) || node === null)
+        return null;
+
+    if (is(aliases.Node, node))
+        return node;
+
+    if (Array.isArray(node))
+        return List(aliases.Node)(node.map(upgrade));
+
+    const target = concrete[node.type];
+    const keys = t.VISITOR_KEYS[node.type];
+    const pairs = keys.map(key => [key, upgrade(node[key])]);
+
+    return target({ ...node, ...Object.fromEntries(pairs) });
+}
+
 
 module.exports.concrete = concrete;
 module.exports.aliases = aliases;
-console.log(builders);
+
+
+console.log(module.exports.upgrade(require("@babel/parser").parseExpression(function testConcurrent2()
+{
+    const result1 = wrt[a]() + wrt[b]();
+    const result2 = wrt[f](result1);
+    const result3 = a_function();;;;
+    const result4 = result3 || wrt[d]();
+    const result5 = result4 ? wrt[e]() : g();
+
+;
+;
+;
+;
+
+    if (wrt[d](result4))
+        return wrt[p]();
+
+    if (wrt[d](result4) + 1)
+        throw wrt[p]();
+
+    if (wrt[e](result4) + 2)
+    {
+        const result7 = wrt[u]();
+
+        return result7 + wrt[y]();
+    }
+
+    return if_ (result5, () => stuff, () => other_stuff);;
+
+    function a_function()
+    {
+        return result2;
+    }
+}
++"")));
+
+
+
+/*console.log(builders);
 
 const b = builders;
 const c = concrete;
@@ -99,4 +168,4 @@ console.log(c.FunctionExpression);
 console.log(node);
 console.log(require("@babel/generator").default(node).code);
 
-console.log(b.ArrayExpression([]));
+console.log(b.ArrayExpression([]));*/
