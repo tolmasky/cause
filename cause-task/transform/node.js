@@ -23,7 +23,7 @@ const fromValidate = validate =>
         () => Or(...oneOfType(validate).map(name =>
             valueTypes[name] || concrete[name] || aliases[name])) :
     validate.each ?
-        () => List(fromValidate(validate.each)()) :
+        () => /*List(fromValidate(validate.each)())*/Array :
     validate.chainOf ?
         validate.chainOf.map(fromValidate).find(x => !!x) :
     false;
@@ -57,7 +57,10 @@ function toNode(name, bridgeName, ...fields)
 {
     const NodeType = data ([name]) (...fields);
 
-    NodeType.prototype.type = bridgeName;
+    if (fields.length === 0)
+        NodeType.type = bridgeName;
+    else
+        NodeType.prototype.type = bridgeName;
 
     return NodeType;
 }
@@ -119,7 +122,7 @@ const builders = Object.fromEntries(Object
 
 module.exports.builders = builders;
 
-module.exports.upgrade = function upgrade(node)
+module.exports.upgrade = function upgrade(node, nested)
 {
     if (node === void(0) || node === null)
         return null;
@@ -128,14 +131,22 @@ module.exports.upgrade = function upgrade(node)
         return node;
 
     if (Array.isArray(node))
-        return List(aliases.Node)(node.map(upgrade));
+        return node.map(upgrade);//List(aliases.Node)(node.map(upgrade));
 
     if (node.type === "EmptyStatement")
         return concrete.EmptyStatement;
 
+/*
+    if (target.upgrade)
+        return target.upgrade(node, nested);
+
+    if (node.type === "Identifier" && nested)
+        return concrete.IdentifierExpression(node);
+*/
+
     const target = concrete[node.type];
     const keys = t.VISITOR_KEYS[node.type];
-    const pairs = keys.map(key => [key, upgrade(node[key])]);
+    const pairs = keys.map(key => [key, upgrade(node[key], nested)]);
 
     return target({ ...node, ...Object.fromEntries(pairs) });
 }
@@ -145,7 +156,7 @@ module.exports.concrete = concrete;
 module.exports.aliases = aliases;
 
 
-console.log(module.exports.upgrade(require("@babel/parser").parseExpression(function testConcurrent2()
+const r = module.exports.upgrade(require("@babel/parser").parseExpression(function testConcurrent2()
 {
     const result1 = wrt[a]() + wrt[b]();
     const result2 = wrt[f](result1);
@@ -178,8 +189,11 @@ console.log(module.exports.upgrade(require("@babel/parser").parseExpression(func
         return result2;
     }
 }
-+"")));
++""));
 
+const generate = node => require("@babel/generator").default(node).code
+
+console.log(require("@babel/generator").default(r).code);
 
 
 /*console.log(builders);
