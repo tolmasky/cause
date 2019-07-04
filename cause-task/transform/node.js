@@ -1,18 +1,25 @@
-const { data, union, parameterized, primitives, tnull, string } = require("@algebraic/type");
+const { data, union, parameterized, primitives, tnull, string, getTypename } = require("@algebraic/type");
+const { List } = require("@algebraic/collections");
 const t = require("@babel/types");
 
 const Nullable = parameterized(T =>
     union `Nullable<${T}>` (T, tnull) );
-const Alias = parameterized((...Ts) =>
-    union `Alias<${Ts.join(", ")}>` (...Ts));
+//const Alias = parameterized((name, ...Ts) =>
+//    union `${name}<${Ts.map(getTypename)}>` (...Ts));
+const Or = parameterized((...Ts) =>
+    Ts.length === 1 ?
+        Ts[0] :
+        union `Alias<${Ts.map(getTypename)}>` (...Ts));
 
 const fromValidate = validate =>
     !validate ? (() => Object) :
     validate.type && validate.type !== "array" ?
         () => primitives[validate.type] :
     validate.oneOfNodeTypes ?
-        () => Alias(...validate.oneOfNodeTypes
+        () => Or(...validate.oneOfNodeTypes
             .map(name => concrete[name] || aliases[name])) :
+    validate.each ?
+        () => List(fromValidate(validate.each)()) :
     validate.chainOf ?
         validate.chainOf.map(fromValidate).find(x => !!x) :
     false;
@@ -31,9 +38,10 @@ const toNodeField = function ([name, definition])
     // just blindly use that.
     const hasTrueDefaultValue = definition.default !== null;
     const defaultValue = definition.optional ?
-        definition.default :
+        () => definition.default :
         hasTrueDefaultValue ?
-            data.default :
+            () => (type => parameterized.is(List, type) ?
+                type(data.default) : data.default)(typeDeferred()) :
             data.Field.NoDefault;
 
     return data.Field({ name, type: typeDeferredWrapped, defaultValue });
@@ -54,7 +62,8 @@ const aliases = Object.fromEntries(Object
     .map(([name, aliases]) =>
         [name, union ([name]) (...aliases.map(name => concrete[name]))]));
 const c = concrete;
-const node = c.FunctionExpression({ id: c.Identifier({ name: "name" }), params:[], body:c.BlockStatement({ body:[], directives:[] }) });
+const a = aliases;
+const node = c.FunctionExpression({ id: c.Identifier({ name: "name" }), params:List(a.Pattern)(), body:c.BlockStatement({ body: List(a.Statement)() }) });
 
 console.log(c.FunctionExpression);
 console.log(node);
