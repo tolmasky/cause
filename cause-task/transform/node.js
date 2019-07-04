@@ -3,19 +3,23 @@ const { List } = require("@algebraic/collections");
 const t = require("@babel/types");
 
 const Nullable = parameterized(T =>
-    union `Nullable<${T}>` (T, tnull) );
+    union `Nullable<${T}>` (tnull, T) );
 const Or = parameterized((...Ts) =>
     Ts.length === 1 ?
         Ts[0] :
         union `Alias<${Ts.map(getTypename)}>` (...Ts));
+const valueTypes = { ...primitives, "null": tnull };
+const oneOf = validate =>
+    validate.oneOfNodeTypes ||
+    validate.oneOfNodeOrValueTypes;
 
 const fromValidate = validate =>
     !validate ? (() => Object) :
     validate.type && validate.type !== "array" ?
         () => primitives[validate.type] :
-    validate.oneOfNodeTypes ?
-        () => Or(...validate.oneOfNodeTypes
-            .map(name => concrete[name] || aliases[name])) :
+    oneOf(validate) ?
+        () => Or(...oneOf(validate).map(name =>
+            valueTypes[name] || concrete[name] || aliases[name])) :
     validate.each ?
         () => List(fromValidate(validate.each)()) :
     validate.chainOf ?
@@ -53,19 +57,33 @@ const concrete = Object.fromEntries(t
         ...Object
             .entries(t.NODE_FIELDS[name])
             .map(toNodeField))]));
-
-const builders = Object.fromEntries(Object
-    .entries(concrete)
-    .map(([name, type]) => [name,
-        (keys => (...args) =>
-            type(Object.fromEntries(args
-                .map((value, index) => [keys[index], value]))))
-        (t.BUILDER_KEYS[name])]));
-
 const aliases = Object.fromEntries(Object
     .entries(t.FLIPPED_ALIAS_KEYS)
     .map(([name, aliases]) =>
         [name, union ([name]) (...aliases.map(name => concrete[name]))]));
+
+const builders = Object.fromEntries(Object
+    .entries(concrete)
+    .map(([name, type]) =>
+    {
+//        const fields = Object.fromEntries(data.fields(type));
+        const typecast = Object.fromEntries(data
+            .fields(type)
+            .map(([name, type]) => [name,
+                parameterized.is(List, type) ?
+                    type :
+                parameterized.is(Nullable, type) &&
+                parameterized.is(List, union.components(type)[1]) ?
+                    type : false]));
+        return [name, (keys => (...args) =>
+            type(Object.fromEntries(args
+                .map((value, index) => [keys[index], value])
+                .map(([key, value]) =>
+                    [key, typecast[key] && value ?
+                        typecast[key](value) : value]))))
+        (t.BUILDER_KEYS[name])];
+    }));
+
 
 module.exports.concrete = concrete;
 module.exports.aliases = aliases;
@@ -74,10 +92,12 @@ console.log(builders);
 const b = builders;
 const c = concrete;
 const a = aliases;
-const node = b.FunctionExpression(b.Identifier("name"), List(a.Pattern)(), b.BlockStatement(List(a.Statement)()));
+const node = b.FunctionExpression(b.Identifier("name"), [], b.BlockStatement([]));
 
 //c.FunctionExpression({ id: c.Identifier({ name: "name" }), params:List(a.Pattern)(), body:c.BlockStatement({ body: List(a.Statement)() }) });
 
 console.log(c.FunctionExpression);
 console.log(node);
 console.log(require("@babel/generator").default(node).code);
+
+console.log(b.ArrayExpression([]));
