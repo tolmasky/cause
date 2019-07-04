@@ -44,13 +44,23 @@ module.exports.CommentBlock = CommentBlock;
 module.exports.CommentLine = CommentLine;
 module.exports.Comment = Comment;
 
+const t = require("@babel/types");
+const undeprecated = t
+    .TYPES
+    .filter(name => t[name] && !t.DEPRECATED_KEYS[name]);
 
+const fieldFromBabelDefinition = require("./field-from-babel-definition");
+const types = Object.fromEntries(
+    undeprecated.map(name => [name, Node([name])
+        (...Object
+            .entries(t.NODE_FIELDS[name])
+            .map(([name, definition]) =>
+                fieldFromBabelDefinition(Node, name, definition)))]));
 
+const aliases = Object.fromEntries(Object
+    .entries(t.FLIPPED_ALIAS_KEYS)
+    .map(([name, aliases]) =>
+        [name, union ([name])
+            (...aliases.map(name => types[name]))]));
 
-
-
-
-
-
-
-
+Object.assign(Node, types, aliases);
