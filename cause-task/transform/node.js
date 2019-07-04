@@ -1,15 +1,9 @@
 const { data, union, parameterized, primitives, tnull } = require("@algebraic/type");
-const { Optional, None } = require("@algebraic/type/optional");
-const fail = require("@algebraic/type/fail");
-
-const nullable = parameterized(T =>
-    union `nullable<${T}>` (T, tnull) );
-
 const t = require("@babel/types");
-const fromDefinition = ({ optional, validate }) =>
-    (deferred => optional ?
-        () => nullable(deferred()) :
-        deferred)(fromValidate(validate) || (() => Object));
+
+const Nullable = parameterized(T =>
+    union `Nullable<${T}>` (T, tnull) );
+
 const cached = f => (cache => (...args) =>
     cache[JSON.stringify(args)] ||
     (cache[JSON.stringify(args)] = f(...args)))
@@ -30,12 +24,31 @@ const fromValidate = validate =>
 const toDeferredField = (name, deferred) =>(console.log((new Function(`return ${name === "extends" || name === "default" || name === "const" ? "_extends" : name } => arguments[0]()`))(deferred)+""),
     (new Function(`return ${name === "extends" || name === "default" || name === "const" ? "_extends" : name } => arguments[0]()`))(deferred));
 
+
+
+const toNodeField = function (definition)
+{
+    const typeDeferred = fromValidate(definition.validate) || (() => Object);
+    const typeDeferredWrapped = definition.optional ?
+        () => Nullable(typeDeferred()) : typeDeferred;
+
+    return typeDeferredWrapped;
+/*
+    const hasTrueDefaultValue = definition.default !== null;
+
+    // Optional here refers to whether it needs to be supplied
+    const isOptional = definition.default !== null && definition.optional;
+*/
+}
+
+
+
 const concrete = Object.fromEntries(t
     .TYPES
     .filter(name => t[name] && !t.DEPRECATED_KEYS[name])
     .map(name => [name, data ([name]) (...Object
         .entries(t.NODE_FIELDS[name])
-        .map(([name, definition]) => [name, fromDefinition(definition)])
+        .map(([name, definition]) => [name, toNodeField(definition)])
         .map(([name, type]) => data.Field({ name, type, defaultValue: null })))]));
 const aliases = Object.fromEntries(Object
     .entries(t.FLIPPED_ALIAS_KEYS)
