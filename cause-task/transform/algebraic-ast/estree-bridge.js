@@ -1,5 +1,5 @@
 const { data } = require("@algebraic/type");
-const ESTreeNameRegExp = /^[^{]*{ESTree\s*\=\s*([^}]+)}$/;
+const ESTreeNameRegExp = /^([^{\s]*)\s*{ESTree\s*\=\s*([^}]+)}$/;
 
 
 // ESTree looks for the "type" property of nodes to identify them. We will be
@@ -10,8 +10,9 @@ module.exports = function ESTreeBridge ([name])
 {
     return function (...fields)
     {
-        const ESTreeType = (name.match(ESTreeNameRegExp) || [, name])[1];
-        const type = data ([name]) (...fields);
+        const [, justName, ESTreeType] = 
+            (name.match(ESTreeNameRegExp) || [, name, name]);
+        const type = data ([justName]) (...fields);
 
         type.prototype.type = ESTreeType;
 

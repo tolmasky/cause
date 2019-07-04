@@ -1,4 +1,4 @@
-const { data, number, string, nullable, union } = require("@algebraic/type");
+const { data, number, string, nullable, union, getTypename } = require("@algebraic/type");
 const ESTreeBridge = require("./estree-bridge");
 
 const Position = data `Position` (
@@ -28,12 +28,12 @@ const Comment = union `Comment` (
 const Node = ([name]) =>
     (...fields) => ESTreeBridge ([name]) (
         ...fields,
-        leadingComments => nullable(Array),
-        innerComments   => nullable(Array),
-        trailingComment => nullable(Array),
-        start           => nullable(number),
-        end             => nullable(number),
-        loc             => nullable(SourceLocation) );
+        leadingComments => [nullable(Array), null],
+        innerComments   => [nullable(Array), null],
+        trailingComment => [nullable(Array), null],
+        start           => [nullable(number), null],
+        end             => [nullable(number), null],
+        loc             => [nullable(SourceLocation), null] );
 
 module.exports = Node;
 
@@ -49,14 +49,34 @@ const undeprecated = t
     .TYPES
     .filter(name => t[name] && !t.DEPRECATED_KEYS[name]);
 
+const IdentifierPattern = Node `IdentifierPattern{ESTree = Identifier}` (
+    name => string );
+
+const IdentifierExpression = Node `IdentifierExpression{ESTree = Identifier}` (
+    name => string );
+
 const fieldFromBabelDefinition = require("./field-from-babel-definition");
 const types = Object.fromEntries(
-    undeprecated.map(name => [name, Node([name])
+[
+    ...undeprecated.map(name => [name, Node([name])
         (...Object
             .entries(t.NODE_FIELDS[name])
             .map(([name, definition]) =>
-                fieldFromBabelDefinition(Node, name, definition)))]));
+                fieldFromBabelDefinition(Node, name, definition)))]),
+    ...[IdentifierPattern, IdentifierExpression]
+        .map(type => [getTypename(type), type]),
+]);
 
+const ESTreeAliasMembers = t.FLIPPED_ALIAS_KEYS;
+const aliasMembers =
+{
+    ...ESTreeAliasMembers,
+    LVal: [...ESTreeAliasMembers["LVal"], "IdentifierPattern"],
+    Pattern: [...ESTreeAliasMembers["Pattern"], "IdentifierPattern"],
+    PatternLike: [...ESTreeAliasMembers["PatternLike"], "IdentifierPattern"],
+    Expression: [...ESTreeAliasMembers["Expression"], "IdentifierExpression"],
+    Node: ["IdentifierPattern", "IdentifierExpression", ...undeprecated]
+};
 const aliases = Object.fromEntries(Object
     .entries(t.FLIPPED_ALIAS_KEYS)
     .map(([name, aliases]) =>
