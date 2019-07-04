@@ -26,19 +26,24 @@ const toDeferredField = (name, deferred) =>(console.log((new Function(`return ${
 
 
 
-const toNodeField = function (definition)
+const toNodeField = function (name, definition)
 {
-    const typeDeferred = fromValidate(definition.validate) || (() => Object);
+    const typeDeferred =
+        fromValidate(definition.validate) || (() => Object);
     const typeDeferredWrapped = definition.optional ?
-        () => Nullable(typeDeferred()) : typeDeferred;
+        () => Nullable(typeDeferred()) :
+        typeDeferred;
 
-    return typeDeferredWrapped;
-/*
+    // By default every definition is assigned a default of null, so we can't
+    // just blindly use that.
     const hasTrueDefaultValue = definition.default !== null;
+    const defaultValue = definition.optional ?
+        definition.default :
+        hasTrueDefaultValue ?
+            data.default :
+            data.Field.NoDefault;
 
-    // Optional here refers to whether it needs to be supplied
-    const isOptional = definition.default !== null && definition.optional;
-*/
+    return data.Field({ name, type: typeDeferredWrapped, defaultValue });
 }
 
 
@@ -48,12 +53,10 @@ const concrete = Object.fromEntries(t
     .filter(name => t[name] && !t.DEPRECATED_KEYS[name])
     .map(name => [name, data ([name]) (...Object
         .entries(t.NODE_FIELDS[name])
-        .map(([name, definition]) => [name, toNodeField(definition)])
-        .map(([name, type]) => data.Field({ name, type, defaultValue: null })))]));
+        .map(([name, definition]) => toNodeField(name, definition)))]));
 const aliases = Object.fromEntries(Object
     .entries(t.FLIPPED_ALIAS_KEYS)
     .map(([name, aliases]) =>
         [name, union ([name]) (...aliases.map(name => concrete[name]))]));
 const c = concrete;
-
 console.log(c.FunctionExpression({ id: c.Identifier({ name: "name" }), params:[], body:c.BlockStatement({ body:[], directives:[] }) }));
