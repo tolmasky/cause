@@ -62,27 +62,26 @@ const aliases = Object.fromEntries(Object
     .map(([name, aliases]) =>
         [name, union ([name]) (...aliases.map(name => concrete[name]))]));
 
-const builders = Object.fromEntries(Object
+const typecasts = Object.fromEntries(Object
     .entries(concrete)
-    .map(([name, type]) =>
-    {
-//        const fields = Object.fromEntries(data.fields(type));
-        const typecast = Object.fromEntries(data
-            .fields(type)
+    .map(([name, type]) => [name, Object.fromEntries(
+        data.fields(type)
             .map(([name, type]) => [name,
                 parameterized.is(List, type) ?
                     type :
                 parameterized.is(Nullable, type) &&
                 parameterized.is(List, union.components(type)[1]) ?
-                    type : false]));
-        return [name, (keys => (...args) =>
+                    type : false]))]));
+const builders = Object.fromEntries(Object
+    .entries(concrete)
+    .map(([name, type, typecast]) =>
+        [name, ((keys, typecast) => (...args) =>
             type(Object.fromEntries(args
                 .map((value, index) => [keys[index], value])
                 .map(([key, value]) =>
                     [key, typecast[key] && value ?
                         typecast[key](value) : value]))))
-        (t.BUILDER_KEYS[name])];
-    }));
+        (t.BUILDER_KEYS[name], typecasts[name])]));
 
 
 module.exports.concrete = concrete;
