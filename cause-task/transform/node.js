@@ -1,32 +1,25 @@
-const { data, union, parameterized, primitives, tnull } = require("@algebraic/type");
+const { data, union, parameterized, primitives, tnull, string } = require("@algebraic/type");
 const t = require("@babel/types");
 
 const Nullable = parameterized(T =>
     union `Nullable<${T}>` (T, tnull) );
+const Alias = parameterized((...Ts) =>
+    union `Alias<${Ts.join(", ")}>` (...Ts));
 
-const cached = f => (cache => (...args) =>
-    cache[JSON.stringify(args)] ||
-    (cache[JSON.stringify(args)] = f(...args)))
-    (Object.create(null));
-const fromOneOfNodeTypes = cached(names =>
-    union ([`${JSON.stringify(names)}`])
-        (...names.map(name =>
-            toDeferredField(name, () => concrete[name] || aliases[name]))));
 const fromValidate = validate =>
     !validate ? (() => Object) :
     validate.type && validate.type !== "array" ?
         () => primitives[validate.type] :
     validate.oneOfNodeTypes ?
-        () => fromOneOfNodeTypes(validate.oneOfNodeTypes) :
+        () => Alias(...validate.oneOfNodeTypes
+            .map(name => concrete[name] || aliases[name])) :
     validate.chainOf ?
         validate.chainOf.map(fromValidate).find(x => !!x) :
     false;
-const toDeferredField = (name, deferred) =>(console.log((new Function(`return ${name === "extends" || name === "default" || name === "const" ? "_extends" : name } => arguments[0]()`))(deferred)+""),
-    (new Function(`return ${name === "extends" || name === "default" || name === "const" ? "_extends" : name } => arguments[0]()`))(deferred));
 
 
 
-const toNodeField = function (name, definition)
+const toNodeField = function ([name, definition])
 {
     const typeDeferred =
         fromValidate(definition.validate) || (() => Object);
@@ -47,16 +40,22 @@ const toNodeField = function (name, definition)
 }
 
 
-
 const concrete = Object.fromEntries(t
     .TYPES
     .filter(name => t[name] && !t.DEPRECATED_KEYS[name])
-    .map(name => [name, data ([name]) (...Object
-        .entries(t.NODE_FIELDS[name])
-        .map(([name, definition]) => toNodeField(name, definition)))]));
+    .map(name => [name,
+        data ([name]) (
+        type => [string, name],
+        ...Object
+            .entries(t.NODE_FIELDS[name])
+            .map(toNodeField))]));
 const aliases = Object.fromEntries(Object
     .entries(t.FLIPPED_ALIAS_KEYS)
     .map(([name, aliases]) =>
         [name, union ([name]) (...aliases.map(name => concrete[name]))]));
 const c = concrete;
-console.log(c.FunctionExpression({ id: c.Identifier({ name: "name" }), params:[], body:c.BlockStatement({ body:[], directives:[] }) }));
+const node = c.FunctionExpression({ id: c.Identifier({ name: "name" }), params:[], body:c.BlockStatement({ body:[], directives:[] }) });
+
+console.log(c.FunctionExpression);
+console.log(node);
+console.log(require("@babel/generator").default(node).code);
