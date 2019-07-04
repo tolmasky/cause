@@ -53,18 +53,42 @@ const undeprecated = t
     .TYPES
     .filter(name => t[name] && !t.DEPRECATED_KEYS[name]);
 
+function toNode(name, bridgeName, ...fields)
+{
+    const NodeType = data ([name]) (...fields);
+
+    NodeType.prototype.type = bridgeName;
+
+    return NodeType;
+}
+
 const concrete = Object.fromEntries(
     undeprecated.map(name => [name,
-        data ([name]) (
-        type => [string, name],
-        ...Object
+        toNode(name, name, ...Object
             .entries(t.NODE_FIELDS[name])
             .map(toNodeField))]));
 
+concrete["IdentifierPattern"] =
+    toNode("IdentifierPattern", "Identifier", name => string );
+
+concrete["IdentifierExpression"] =
+    toNode("IdentifierExpression", "Identifier", name => string );
+
 module.exports.concrete = concrete;
 
+const builtInAliases = t.FLIPPED_ALIAS_KEYS;
+const expandedAliases =
+{
+    ...builtInAliases,
+    LVal: [...builtInAliases["LVal"], "IdentifierPattern"],
+    Pattern: [...builtInAliases["Pattern"], "IdentifierPattern"],
+    PatternLike: [...builtInAliases["PatternLike"], "IdentifierPattern"],
+    Expression: [...builtInAliases["Expression"], "IdentifierExpression"],
+    Node: ["IdentifierPattern", "IdentifierExpression", ...undeprecated]
+};
+
 const aliases = Object.fromEntries(Object
-    .entries({ ...t.FLIPPED_ALIAS_KEYS, Node: undeprecated })
+    .entries(expandedAliases)
     .map(([name, aliases]) =>
         [name, union ([name])
             (...aliases.map(name => concrete[name]))]));
@@ -105,6 +129,9 @@ module.exports.upgrade = function upgrade(node)
 
     if (Array.isArray(node))
         return List(aliases.Node)(node.map(upgrade));
+
+    if (node.type === "EmptyStatement")
+        return concrete.EmptyStatement;
 
     const target = concrete[node.type];
     const keys = t.VISITOR_KEYS[node.type];
