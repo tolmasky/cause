@@ -1,7 +1,9 @@
+const { string } = require("@algebraic/type");
+const { Set } = require("@algebraic/collections");
 const { fromJS } = require("immutable");
 const nullable = (...oneOfNodeTypes) => ({ oneOfNodeTypes, optional: true }); 
 const types = (...oneOfNodeTypes) => ({ oneOfNodeTypes });
-
+const direct = type => ({ validate: { direct: type } });
 
 
 module.exports = fromJS(require("@babel/types").NODE_FIELDS)
@@ -22,6 +24,12 @@ module.exports = fromJS(require("@babel/types").NODE_FIELDS)
     .setIn(["FunctionExpression", "id", "validate"], nullable("IdentifierPattern"))
 
     .setIn(["AssignmentPattern", "left", "validate"], types("RootPattern"))
+    .setIn(["AssignmentPattern", "bindings"], direct(Set(string)))
+
+    .setIn(["ArrayPattern", "bindings"], direct(Set(string)))
+    .setIn(["RestElement", "bindings"], direct(Set(string)))
+    .setIn(["ObjectPattern", "bindings"], direct(Set(string)))
+
 
     // We currently don't parameterize Arrays, so don't do anything to this yet.
     //.setIn(["ArrayPattern", "elements", "validate"],

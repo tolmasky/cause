@@ -2,29 +2,28 @@ const { data, nullable, union, or, getTypename } = require("@algebraic/type");
 const { number, string, boolean } = require("@algebraic/type");
 const { OrderedSet, Set } = require("@algebraic/collections");
 
+const t = require("@babel/types");
+
+const undeprecated = require("./babel/undeprecated-types");
 const SourceLocation = require("./source-location");
 const Comment = require("./comment");
 const ESTreeBridge = require("./estree-bridge");
 const adjustedFields = require("./adjusted-fields");
+const fieldFromBabelDefinition = require("./field-from-babel-definition");
 
 
 const Node = ([name]) =>
     (...fields) => ESTreeBridge ([name]) (
         ...fields,
-        leadingComments => [nullable(Array), null],
-        innerComments   => [nullable(Array), null],
-        trailingComment => [nullable(Array), null],
-        start           => [nullable(number), null],
-        end             => [nullable(number), null],
-        loc             => [nullable(SourceLocation), null] );
+        leadingComments     => [nullable(Array), null],
+        innerComments       => [nullable(Array), null],
+        trailingComments    => [nullable(Array), null],
+        start               => [nullable(number), null],
+        end                 => [nullable(number), null],
+        loc                 => [nullable(SourceLocation), null] );
 
 module.exports = Node;
 module.exports.Node = Node;
-
-const t = require("@babel/types");
-const undeprecated = t
-    .TYPES
-    .filter(name => t[name] && !t.DEPRECATED_KEYS[name]);
 
 const IdentifierPattern = Node `IdentifierPattern{ESTree = Identifier}` (
     name        => string,
@@ -38,12 +37,9 @@ const ObjectPropertyPattern =
         key         => or (Node.Expression, Node.Identifier, Node.Literal),
         value       => or (Node.RootPattern, Node.AssignmentPattern),
         computed    => [boolean, false],
-        shorthand   => [boolean, false]
-    );
+        shorthand   => [boolean, false],
+        bindings    => Set(string) );
 
-
-
-const fieldFromBabelDefinition = require("./field-from-babel-definition");
 const types = Object.fromEntries(
 [
     ...undeprecated.map(name => [name, Node([name])
@@ -92,8 +88,8 @@ const aliases = Object.fromEntries(Object
 
 Object.assign(Node, types, aliases);
 
-for (const type of Object.values(types))
-{
-    console.log(getTypename(type));
-    console.log(Object.fromEntries(data.fields(type)));
-}
+// for (const type of Object.values(types))
+// {
+//     console.log(getTypename(type));
+//     console.log(Object.fromEntries(data.fields(type)));
+// }

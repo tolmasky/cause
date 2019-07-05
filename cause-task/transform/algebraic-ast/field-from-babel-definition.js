@@ -35,6 +35,7 @@ function deferredTypeFromValidate(Node, validate)
     return !validate ? () => any :
 
     // The value types are easy.
+    validate.direct ? () => validate.direct :
     validate.type === "array" ? () => Array :
     validate.type ? () => valueTypes[validate.type] :
 
