@@ -1,4 +1,5 @@
 const { data, number, string, nullable, union, getTypename } = require("@algebraic/type");
+const { OrderedSet } = require("@algebraic/collections");
 const ESTreeBridge = require("./estree-bridge");
 
 const Position = data `Position` (
@@ -54,6 +55,18 @@ const IdentifierPattern = Node `IdentifierPattern{ESTree = Identifier}` (
 
 const IdentifierExpression = Node `IdentifierExpression{ESTree = Identifier}` (
     name => string );
+/*
+const or = require("@algebraic/type").parameterized((...Ts) =>
+    Ts.length === 1 ?
+        Ts[0] :
+        union `or <${Ts.map(getTypename)}>` (...Ts));*/
+const ObjectPropertyPattern =
+    Node `ObjectPropertyPattern {ESTree = ObjectProperty}` (
+        key         => Node.Expression,
+        value       => Node.Pattern,
+        computed    => [boolean, false],
+        shorthand   => [boolean, false]
+    );
 
 const fieldFromBabelDefinition = require("./field-from-babel-definition");
 const types = Object.fromEntries(
@@ -63,22 +76,37 @@ const types = Object.fromEntries(
             .entries(t.NODE_FIELDS[name])
             .map(([name, definition]) =>
                 fieldFromBabelDefinition(Node, name, definition)))]),
-    ...[IdentifierPattern, IdentifierExpression]
+    ...[IdentifierPattern, ObjectPropertyPattern, IdentifierExpression]
         .map(type => [getTypename(type), type]),
 ]);
 
-const ESTreeAliasMembers = t.FLIPPED_ALIAS_KEYS;
-const aliasMembers =
-{
-    ...ESTreeAliasMembers,
-    LVal: [...ESTreeAliasMembers["LVal"], "IdentifierPattern"],
-    Pattern: [...ESTreeAliasMembers["Pattern"], "IdentifierPattern"],
-    PatternLike: [...ESTreeAliasMembers["PatternLike"], "IdentifierPattern"],
-    Expression: [...ESTreeAliasMembers["Expression"], "IdentifierExpression"],
-    Node: ["IdentifierPattern", "IdentifierExpression", ...undeprecated]
-};
+const ALIAS_MEMBERS = (({ PatternLike, LVal, Expression, Pattern, ...rest }) =>
+({
+    ...rest,
+
+    Node: [
+        "IdentifierPattern",
+        "IdentifierExpression",
+        "ObjectPropertyPattern",
+        ...undeprecated],
+
+    Expression: OrderedSet(string)(Expression)
+        .remove("Identifier")
+        .concat(["IdentifierExpression"])
+        .toArray(),
+    LVal: OrderedSet(string)(LVal)
+        .remove("Identifier")
+        .concat(["IdentifierPattern", "IdentifierExpression"])
+        .toArray(),
+    Pattern: OrderedSet(string)(Pattern)
+        .concat([
+            "IdentifierPattern",
+            "ObjectPropertyPattern",
+            "RestElement"])
+        .toArray()
+}))(t.FLIPPED_ALIAS_KEYS);
 const aliases = Object.fromEntries(Object
-    .entries(t.FLIPPED_ALIAS_KEYS)
+    .entries(ALIAS_MEMBERS)
     .map(([name, aliases]) =>
         [name, union ([name])
             (...aliases.map(name => types[name]))]));

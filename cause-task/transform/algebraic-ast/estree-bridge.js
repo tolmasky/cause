@@ -10,7 +10,7 @@ module.exports = function ESTreeBridge ([name])
 {
     return function (...fields)
     {
-        const [, justName, ESTreeType] = 
+        const [, justName, ESTreeType] =
             (name.match(ESTreeNameRegExp) || [, name, name]);
         const type = data ([justName]) (...fields);
 
