@@ -1,7 +1,7 @@
-const { data, parameterized, any, primitives, nullable } = require("@algebraic/type");
+const { data, parameterized, any, primitives, nullable, union, getTypename } = require("@algebraic/type");
 
 const valueTypes = { ...primitives, "null": primitives.tnull };
-const unionFromNames = parameterized((...Ts) =>
+const unionFromNames = parameterized(Ts =>
     Ts.length === 1 ?
         Ts[0] :
         union `Or <${Ts.map(getTypename)}>` (...Ts));    
@@ -12,7 +12,7 @@ module.exports = function fieldFromBabelDefinition(Node, name, definition)
     const deferredType =
         deferredTypeFromValidate(Node, definition.validate) || any;
     const wrappedDeferredType = definition.optional ?
-        () => nullable(typeDeferred()) :
+        () => nullable(deferredType()) :
         deferredType;
 
     // By default every definition is assigned a default of null, so we can't
@@ -39,7 +39,7 @@ function deferredTypeFromValidate(Node, validate)
     return !validate ? any :
 
     // The value types are easy.
-    validate.type === "array" ? Array :
+    validate.type === "array" ? () => Array :
     validate.type ? () => valueTypes[validate.type] :
 
     // This is a weird one. Sometimes the use of `oneOf` is suspect, or at least
@@ -55,11 +55,12 @@ function deferredTypeFromValidate(Node, validate)
             fail(`Could not convert oneOf validation to primitive type.`)) :
 
     validate.oneOfNodeTypes ?
-        () => unionFromNames(...validate
+        () => unionFromNames(validate
             .oneOfNodeTypes.map(name => Node[name])) :
 
     validate.oneOfNodeOrValueTypes ?
-        () => unionFromNames(...validate.oneOfNodeTypes
+        () => unionFromNames(validate
+            .oneOfNodeOrValueTypes
             .map(name => valueTypes[name] || Node[name])) :
 
     // FIXME: Maybe when we support properly typed arrays bring this back?
