@@ -1,16 +1,12 @@
-const { data, parameterized, any, primitives, nullable, union, getTypename } = require("@algebraic/type");
-
+const { data, parameterized, any, primitives, nullable, or } = require("@algebraic/type");
+const fail = require("@algebraic/type/fail");
 const valueTypes = { ...primitives, "null": primitives.tnull };
-const unionFromNames = parameterized(Ts =>
-    Ts.length === 1 ?
-        Ts[0] :
-        union `Or <${Ts.map(getTypename)}>` (...Ts));    
 
 
 module.exports = function fieldFromBabelDefinition(Node, name, definition)
 {
     const deferredType =
-        deferredTypeFromValidate(Node, definition.validate) || any;
+        deferredTypeFromValidate(Node, definition.validate) || (() => any);
     const wrappedDeferredType = definition.optional ?
         () => nullable(deferredType()) :
         deferredType;
@@ -36,7 +32,7 @@ function deferredTypeFromValidate(Node, validate)
 
     // There are only 10 fields that don't define a proper validation
     // function, and they all appear to be bugs.
-    return !validate ? any :
+    return !validate ? () => any :
 
     // The value types are easy.
     validate.type === "array" ? () => Array :
@@ -55,13 +51,12 @@ function deferredTypeFromValidate(Node, validate)
             fail(`Could not convert oneOf validation to primitive type.`)) :
 
     validate.oneOfNodeTypes ?
-        () => unionFromNames(validate
-            .oneOfNodeTypes.map(name => Node[name])) :
+        () => or(...validate.oneOfNodeTypes
+            .map(name => Node[name]|| fail("FOUND NOTHING FOR " + name))) :
 
     validate.oneOfNodeOrValueTypes ?
-        () => unionFromNames(validate
-            .oneOfNodeOrValueTypes
-            .map(name => valueTypes[name] || Node[name])) :
+        () => or(...validate.oneOfNodeOrValueTypes
+            .map(name => valueTypes[name] || Node[name] || fail("FOUND NOTHING FOR " + name))) :
 
     // FIXME: Maybe when we support properly typed arrays bring this back?
     // validate.each ? () => /*List(fromValidate(validate.each)())*/Array :
