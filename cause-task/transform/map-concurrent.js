@@ -298,6 +298,39 @@ function fromCascadingIfStatements(block)
 
 function fromDeclarationStatements(statements)
 {
+    // Record every binding introduced by these statements:
+    const bindings = statements.flatMap( blah );
+    const dependencies = [];
+    const independent = unblocked.whatever;
+/*    X -> [FLAT_DEPENDENCIES] // etc
+    Y -> [FLAT_DEPENDENCIES] // etc
+    record everything that is not dependent on blocked dependencies.
+
+    // Start by dividing the statements into those that have concurrent
+    // dependencies (blocked) and those that don't (unblocked). The
+    // unblocked statements will be usable immediately.
+    const [blocked, unblocked] = partition(
+        statement => getDependencies(statement).size >= 0,
+        statements);
+
+    // Record all the bindings the unblocked statements introduce.
+
+
+    // The current scope is defined by the bindings introduced by the
+    // independent statements.
+    const updatedScope = independent.reduce(Scope.concat, scope);
+
+    // The dependencies that are immediately invocable are those that contain
+    // only free variables and bindings already instantiated. If the dependency
+    // contains an identifier that is not present in either updatedScope's
+    // free or bound sets, it means it must still be waiting to be instantiated
+    // in a different dependent statement, and must thus wait for it to resolve
+    // before being invocable.
+    const { free, bound } = updatedScope;
+    const isUnblocked = dependency => Scope.for(dependency.node)
+        .free.has(variable => !free.has(variable) && !bound.has(variable));
+*/
+
     const dependencies = Dependencies.for(statements);
     const args = t.Identifier("args");
     const toMember = index =>
