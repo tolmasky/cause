@@ -22,8 +22,8 @@ const toComputedProperty = ({ computed, property }) =>
 const tδ = ((call, apply) =>
     (callee, ds, args) =>
         is (Node.MemberExpression, callee) ?
-            fromBabel(apply(callee.object, toComputedProperty(callee), ds, args)) :
-            fromBabel(call(callee, ds, args)))
+            apply(callee.object, toComputedProperty(callee), ds, args) :
+            call(callee, ds, args))
     (template((value, ds, args) => δ.call(value, ds, args)),
      template((object, property, ds, args) =>
         δ.apply(object, property, ds, args)))
@@ -67,8 +67,17 @@ module.exports = map(
         const ds = expression
             .arguments
             .flatMap((argument, index) => isWRT(argument) ? [index] : []);
+        const calleeIsWRT = isWRT(expression.callee);
+
+        if (!calleeIsWRT && ds.length <= 0)
+            return expression;
+
+        const args = ds.length > 0 ?
+            expression.arguments.map(argument =>
+                isWRT(argument) ? argument.property : argument) :
+            expression.arguments;
         const updated = ds.length > 0 ?
-            tδ(expression.callee, ds, expression.arguments) :
+            tδ(expression.callee, ds, args) :
             expression;
 
         return updated;

@@ -1,28 +1,33 @@
-const t = require("@babel/types");
-const { parseExpression } = require("@babel/parser");
+const { is, string } = require("@algebraic/type");
+const { OrderedSet } = require("@algebraic/collections");
+
+const Node = require("@algebraic/ast/node");
+const parse = require("@algebraic/ast/parse");
+const fromBabel = require("@algebraic/ast/from-babel");
+
 const toTemplate = require("@babel/template").expression;
 const generate = 
     (generate => node => generate(node).code)
     (require("@babel/generator").default);
-const valueToExpression = require("./value-to-expression");
-
-const ArrayMonoid =
-    { empty: [], union: (lhs, rhs) => lhs.concat(rhs), from: x => x };
+const valueToExpression = require("@algebraic/ast/value-to-expression");
 
 
 module.exports = function template(f)
 {
-    const fExpression = parseExpression(f + "");
+    const fExpression = parse.expression(f + "");
     const { params, body } = fExpression;
-    const names = variableNamesFromPattern(ArrayMonoid, params);
-    const hasRest = t.isRestElement(params[params.length - 1]);
+    const names = params.reduce((names, param) =>
+        names.union(param.bindingNames), OrderedSet(string)())
+        .toArray();
+
+    const hasRest = is (Node.RestElement, params[params.length - 1]);
     const templateString = names.reduce((string, name, index) =>
         string.replace(RegExp(name, "g"), `%%arg${index}%%`),
         generate(body));
     const indexedTemplate = toTemplate(templateString);
 
     return (...args) =>
-        indexedTemplate(Object.fromEntries(
+        fromBabel(indexedTemplate(Object.fromEntries(
         [
             ...(hasRest ? args.slice(0, params.length - 1) : args)
                 .map((value, index) =>
@@ -31,28 +36,5 @@ module.exports = function template(f)
                 [] :
                 [[`arg${params.length - 1}`,
                     args.slice(params.length - 1).map(valueToExpression)]])
-        ]));
-}
-
-function variableNamesFromPattern(M, pattern)
-{
-    if (Array.isArray(pattern))
-        return pattern.reduce((names, pattern) =>
-            M.union(names, variableNamesFromPattern(M, pattern)), M.empty);
-
-    const { empty, union, from } = M;
-    const type = pattern.type;
-
-    return  type === "Identifier" ?
-                from([pattern.name]) :
-            type === "ArrayPattern" ?
-                pattern.elements
-                    .filter(element => !!element)
-                    .map(element => variableNamesFromPattern(M, element))
-                    .reduce(union, empty) :
-            type === "AssignmentPattern" ?
-                variableNamesFromPattern(M, pattern.left) :
-            type === "RestElement" ?
-                variableNamesFromPattern(M, pattern.argument) :
-            from(pattern.properties.map(property => property.value));
+        ])));
 }
