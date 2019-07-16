@@ -137,12 +137,28 @@ function fromFunction(functionNode)
     if (is (Node.Expression, body))
         throw Error("NEED TO SUPPORT SINGLE EXPRESSION CASE");
 
+    const statements = fromStatements(body.body);
+    const updatedBody = Node.BlockStatement({ ...body, body: statements });
     const NodeType = type.of(functionNode);
-    const hoisted = hoistFunctionDeclarations(body);
+
+    return NodeType({ ...functionNode, body: updatedBody });
+}
+
+function fromStatements(statements)
+{
+    const hoisted = hoistFunctionDeclarations(statements);
     const compressed = removeEmptyStatements(hoisted);
     const separated = separateVariableDeclarations(compressed);
 
-    return NodeType({ ...functionNode, body: separated });
+    return separated;
+}
+
+function fromDeclarationStatements_(statements)
+{
+    // Record every binding introduced by these statements:
+    const bindings = statements.flatMap( blah );
+    const dependencies = [];
+    const independent = unblocked.whatever;
 }
 
 function isWRT(expression)
@@ -236,7 +252,7 @@ function fromCascadingIfStatements(block)
     return fromDeclarationStatements(singleResultForm);
 }
 
-function fromDeclarationStatements(statements)
+function fromDeclarationStatements_(statements)
 {
     // Record every binding introduced by these statements:
     const bindings = statements.flatMap( blah );
@@ -295,42 +311,41 @@ function fromDeclarationStatements(statements)
                 ...dependencies.map(({ node }) => node)))]);
 }
 
-function removeEmptyStatements(block)
+function removeEmptyStatements(statements)
 {
-    const body = block.body.filter(node => !is(Node.EmptyStatement, node));
+    const updated = statements.filter(node => !is(Node.EmptyStatement, node));
 
-    return  body.length !== block.body.length ?
-            Node.BlockStatement({ ...block, body }) :
-            block;
+    return  updated.length !== statements.length ?
+            updated :
+            statements;
 }
 
-function separateVariableDeclarations(block)
+function separateVariableDeclarations(statements)
 {
-    const body = block.body
+    const updated = statements
         .flatMap(statement =>
             !is (Node.BlockVariableDeclaration, statement) ||
             statement.declarators.length <= 1 ?
-                statement :(console.log("OK!", statement.declarators.length),
+                statement :
                 statement.declarators
                     .map(declarator =>
                         Node.BlockVariableDeclaration
-                            ({ ...statement, declarators: [declarator] }))));
-    console.log("here...");
-    return  body.length !== block.body.length ?
-            Node.BlockStatement({ ...block, body }) :
-            block;
+                            ({ ...statement, declarators: [declarator] })));
+
+    return  updated.length !== statements.length ?
+            updated :
+            statements;
 }
 
-function hoistFunctionDeclarations(block)
+function hoistFunctionDeclarations(statements)
 {
     // The first step is to hoist all the function declarations to the top.
     // Change them to const declarations to make our lives easier later.
-    const statements = block.body;
     const [functionDeclarations, rest] =
         partition(is(Node.FunctionDeclaration), statements);
 
     if (functionDeclarations.length === 0)
-        return block;
+        return statements;
 
     const asVariableDeclarations = functionDeclarations
         .map(functionDeclaration =>
@@ -339,9 +354,8 @@ function hoistFunctionDeclarations(block)
         .map(([id, init]) => [Node.VariableDeclarator({ id, init })])
         .map(declarators =>
             Node.BlockVariableDeclaration({ kind: "const", declarators }));
-    const body = [...asVariableDeclarations, ...rest];
 
-    return Node.BlockStatement({ ...block, body });
+    return [...asVariableDeclarations, ...rest];
 }
 
 function fromDeferredOperator(operator, ...pairs)
