@@ -1,4 +1,4 @@
-const { is } = require("@algebraic/type");
+const { is, type } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const map = require("@algebraic/ast/map");
 const fromBabel = require("@algebraic/ast/from-babel");
@@ -62,8 +62,44 @@ module.exports = map(
         "WhileStatement",
         "SwitchStatement"),
 
+    /*
+
+    FunctionExpression(fExpression)
+    {
+        const fReduced = map.as("Node", node);
+        const dependencies = Dependencies.for(fReduced);
+
+        if (dependencies.size <= 0)
+            return fReduced;
+
+        return { ...fReduced, body: fromBlockStatement(fReduced.body) };
+    },*/
+
     CallExpression(expression)
     {
+        const { callee, arguments: args } = expression;
+
+        if (!isIdentifierExpression("parallel", callee) ||
+            args.length !== 1)
+            return expression;
+
+        const firstArgument = args[0];
+
+        if (!is (Node.ArrowFunctionExpression, firstArgument) &&
+            !is (Node.FunctionExpression, firstArgument))
+            return expression;
+
+        if (expression.freeVariables.has("wrt"))
+            console.log("YES! --");
+
+        return fromFunction(firstArgument);
+    }
+});
+
+const isIdentifierExpression = (name, node) =>
+    is (Node.IdentifierExpression, node) && node.name === name;
+
+/*
         const ds = expression
             .arguments
             .flatMap((argument, index) => isWRT(argument) ? [index] : []);
@@ -92,8 +128,22 @@ module.exports = map(
         }
 
         return ConvertedType.with(updated, convertedType);
-    }
-});
+*/
+
+function fromFunction(functionNode)
+{
+    const { body } = functionNode;
+
+    if (is (Node.Expression, body))
+        throw Error("NEED TO SUPPORT SINGLE EXPRESSION CASE");
+
+    const NodeType = type.of(functionNode);
+    const hoisted = hoistFunctionDeclarations(body);
+    const compressed = removeEmptyStatements(hoisted);
+    const separated = separateVariableDeclarations(compressed);
+
+    return NodeType({ ...functionNode, body: separated });
+}
 
 function isWRT(expression)
 {console.log(is (Node.ComputedMemberExpression, expression))
@@ -101,7 +151,7 @@ function isWRT(expression)
             is (Node.IdentifierExpression, expression.object) &&
             expression.object.name === "wrt";
 }
-
+/*
 function fromFunction(mapChildren)
 {
     const dependencies = Dependencies.for(fReduced);
@@ -110,14 +160,14 @@ function fromFunction(mapChildren)
         return fReduced;
 
     return { ...fReduced, body: fromBlockStatement(fReduced.body) };
-}
+}*/
 
 function fromBlockStatement(block)
 {
     const hoisted = hoistFunctionDeclarations(block);
     const compressed = removeEmptyStatements(hoisted);
 
-    return fromCascadingIfStatements(compressed);
+    return compressed;//fromCascadingIfStatements(compressed);
 }
 
 // Terminology: Result statements are either traditional JavaScript return
@@ -247,8 +297,28 @@ function fromDeclarationStatements(statements)
 
 function removeEmptyStatements(block)
 {
-    return r.BlockStatement(block
-        .body.filter(statement => !t.isEmptyStatement(statement)));
+    const body = block.body.filter(node => !is(Node.EmptyStatement, node));
+
+    return  body.length !== block.body.length ?
+            Node.BlockStatement({ ...block, body }) :
+            block;
+}
+
+function separateVariableDeclarations(block)
+{
+    const body = block.body
+        .flatMap(statement =>
+            !is (Node.BlockVariableDeclaration, statement) ||
+            statement.declarators.length <= 1 ?
+                statement :(console.log("OK!", statement.declarators.length),
+                statement.declarators
+                    .map(declarator =>
+                        Node.BlockVariableDeclaration
+                            ({ ...statement, declarators: [declarator] }))));
+    console.log("here...");
+    return  body.length !== block.body.length ?
+            Node.BlockStatement({ ...block, body }) :
+            block;
 }
 
 function hoistFunctionDeclarations(block)
@@ -257,32 +327,21 @@ function hoistFunctionDeclarations(block)
     // Change them to const declarations to make our lives easier later.
     const statements = block.body;
     const [functionDeclarations, rest] =
-        partition(t.isFunctionDeclaration, statements);
+        partition(is(Node.FunctionDeclaration), statements);
+
+    if (functionDeclarations.length === 0)
+        return block;
+
     const asVariableDeclarations = functionDeclarations
         .map(functionDeclaration =>
-            [functionDeclaration.id.name, functionDeclaration])
-        .map(([name, functionDeclaration]) =>
-        [
-            Scope.with(IdentifierPattern({ name }), Scope.fromBound(name)),
-            toFunctionExpression(functionDeclaration)
-        ])
-        .map(([id, functionDeclaration]) =>
-            t.VariableDeclaration("const",
-                [t.VariableDeclarator(id, functionDeclaration)]));
-    const hoisted = Scope.with(
-        [...asVariableDeclarations, ...rest], Scope.for(statements));
+            [functionDeclaration.id,
+                Node.FunctionExpression(functionDeclaration)])
+        .map(([id, init]) => [Node.VariableDeclarator({ id, init })])
+        .map(declarators =>
+            Node.BlockVariableDeclaration({ kind: "const", declarators }));
+    const body = [...asVariableDeclarations, ...rest];
 
-    return Scope.with(t.BlockStatement(hoisted), Scope.for(block));
-}
-
-// We have to do this tricky id business to avoid FunctionExpression getting
-// angry that we are passing an IdentifierPattern instead of an
-// IdentifierExpression as id.
-function toFunctionExpression({ id, params, body, generator, async })
-{
-    return Object.assign(
-        t.FunctionExpression(null, params, body, generator, async),
-        { id });
+    return Node.BlockStatement({ ...block, body });
 }
 
 function fromDeferredOperator(operator, ...pairs)
