@@ -144,13 +144,24 @@ function fromFunction(functionNode)
     return NodeType({ ...functionNode, body: updatedBody });
 }
 
+const pipe = (...fs) => value => fs.reduce((value, f) => f(value), value);
+
 function fromStatements(statements)
 {
-    const hoisted = hoistFunctionDeclarations(statements);
-    const compressed = removeEmptyStatements(hoisted);
-    const separated = separateVariableDeclarations(compressed);
+    const normalized = pipe(
+        hoistFunctionDeclarations,
+        removeEmptyStatements,
+        separateVariableDeclarations)(statements);
 
-    return separated;
+    // Usable now:
+    // Now dependencies, AND no variables dependent on blocked.
+    const [independent, dependent] = partition(
+        statement => !statement.freeVariables.has("wrt"),
+        normalized);
+
+    return [...independent, ...dependent];
+
+    return normalized;
 }
 
 function fromDeclarationStatements_(statements)
