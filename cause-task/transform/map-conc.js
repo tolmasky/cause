@@ -491,9 +491,10 @@ function liftParallelExpression(statement)
     const dependency =
         Dependency({ name: "MADE_UP", expression: trueCallExpression });
     const variable = Node.IdentifierExpression({ name: "MADE_UP" });
-    const immediate = KeyPath.setJust(-2, keyPath, variable, statement);
+    const replaced = KeyPath.setJust(-2, keyPath, variable, statement);
+    const [dependencies, immediate] = liftParallelExpression(replaced);
 
-    return [[dependency], [immediate]];
+    return [[dependency, ...dependencies], immediate];
 }
 
 /*
