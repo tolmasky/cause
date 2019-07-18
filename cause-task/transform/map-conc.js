@@ -1,9 +1,12 @@
-const { is, type } = require("@algebraic/type");
+const { string, is, type } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const map = require("@algebraic/ast/map");
 const fromBabel = require("@algebraic/ast/from-babel");
 const partition = require("@climb/partition");
 const Node = require("@algebraic/ast/node");
+const { List, Set } = require("@algebraic/collections");
+const StringSet = Set(string);
+const KeyPath = require("@algebraic/ast/key-path");
 
 const vernacular = name =>
     name.replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
@@ -42,8 +45,8 @@ const t_defer = expression =>
         t_thunk(expression);
 
 const tδ_success = template(expression => δ.success(expression));
-const tδ_operator = template(name => δ.operators[name]);
-const tδ_ternary = tδ_operator("?:");
+//const tδ_operator = template(name => δ.operators[name]);
+//const tδ_ternary = tδ_operator("?:");
 
 // at statement level?
 module.exports = map(
@@ -130,6 +133,13 @@ const isIdentifierExpression = (name, node) =>
         return ConvertedType.with(updated, convertedType);
 */
 
+function getFreeVariableNames(statement)
+{
+    return StringSet(statement.freeVariables.keys());
+}
+
+const pipe = (...fs) => value => fs.reduce((value, f) => f(value), value);
+
 function fromFunction(functionNode)
 {
     const { body } = functionNode;
@@ -137,31 +147,144 @@ function fromFunction(functionNode)
     if (is (Node.Expression, body))
         throw Error("NEED TO SUPPORT SINGLE EXPRESSION CASE");
 
-    const statements = fromStatements(body.body);
-    const updatedBody = Node.BlockStatement({ ...body, body: statements });
+    const normalizedStatements = pipe(
+        hoistFunctionDeclarations,
+        removeEmptyStatements,
+        separateVariableDeclarations)(body.body);
+        
+    const liftedStatements = normalizedStatements.map(liftParallelExpression);
+
+    
+//    const blockBindingNames = 
+//    const statements = fromStatements(functionNode.bindingNames, body.body);
+//    console.log(statements);
+    const updatedBody = Node.BlockStatement({ ...body, body: liftedStatements });
     const NodeType = type.of(functionNode);
 
     return NodeType({ ...functionNode, body: updatedBody });
 }
 
-const pipe = (...fs) => value => fs.reduce((value, f) => f(value), value);
+/*
 
-function fromStatements(statements)
+    // For each statement we want a list of all it's references to other
+    // definitions *within* the function. Truly free variables and function
+    // signature bindings (like the function's id and parameters) are irrelevant
+    // in calculating inter-dependencies within the function:
+    //
+    // InternalDependencies(statement) =
+    // FreeVariables(statement) - FreeVariables(owningBlock)
+
+    const freeVariables = getFreeVariableNames(functionNode.body);
+    const statementPairs = normalizedStatements.map(statement =>
+        [statement, getFreeVariableNames(statement).subtract(freeVariables)]);
+    
+    
+    const statements = fromStatements(functionNode.bindingNames, body.body);
+
+    const updatedBody = Node.BlockStatement({ ...body, body: statements });
+    const NodeType = type.of(functionNode);
+    
+    
+    const usableVariables= Set(string)(freeVariables).subtract("wrt");
+    
+    */
+
+/*
+function fromStatements(bindingNames, statements)
 {
-    const normalized = pipe(
-        hoistFunctionDeclarations,
-        removeEmptyStatements,
-        separateVariableDeclarations)(statements);
+
+    const statementsPairs = normalized.map(statement =>
+        [statement, StringSet(statement.freeVariables.keys())]);
+
+    return fromStatementPairs(initiallyUsableVariables, statementsPairs);
+}*/
+/*
+three lists:
+
+wrts now, blocked, reeady
+split out
+*/
+function fromStatementPairs(statementPairs)
+{
+
+    const NoStatements = List(Node.Statement)();
+    const [_, blocked, unblocked] = statementPairs
+        .reduce(([dependentVariables, blocked, unblocked], [statement]) => 
+            statement.freeVariables
+                .some((_, name) => dependentVariables.has(name)) ?
+                    [dependentVariables.concat(statement.blockBindingNames),
+                        blocked.push(statement),
+                        unblocked] :
+                    [dependentVariables, blocked, unblocked.push(statement)],
+            [StringSet(["wrt"]), NoStatements, NoStatements]);
+
+
+    return [...unblocked, ...blocked];
+/*
+    const partition (has("wrt"))
+    unblocked = if no wrt and no dependency wrt;
+    
+
+    hasDependency
+// if i havee no dependencies?
+// or if i have no dependencies on something with wrt[]
+
+    const NoStatements = List(Node.Statement)();
+    const [usableVariables, unblocked, blocked] = statementPairs
+        .reduce(([usableVariables, unblocked, blocked],
+            [statement, freeVariables]) =>
+            (console.log(usableVariables+"", statement.blockBindingNames),
+                !statement.freeVariables.has("wrt") &&
+                freeVariables.subtract(usableVariables).size <= 0 ?
+                    [usableVariables.union(statement.blockBindingNames.keys()),
+                        unblocked.push(statement),
+                        blocked] :
+                    [usableVariables, unblocked,
+                        blocked.push([statement, freeVariables])]),
+            [initiallyUsableVariables, NoStatements, NoStatements]);
+
+    return [...unblocked, ...blocked.map(([statement]) => statement)];
+    /*
+            
+            bindings.intersect(statement.freeVariables.keys()).size <= 0,
+        )
+
+    const [unblocked, blocked] = partition(
+        statement =>
+            !statement.freeVariables.has("wrt") &&
+            bindings.intersect(statement.freeVariables.keys()).size <= 0,
+        normalized);
+
+// just wrt?
+    const [independent, dependent] = partition(
+        statement =>
+            !statement.freeVariables.has("wrt") &&
+            bindings.intersect(statement.freeVariables.keys()).size <= 0,
+        normalized);
+
 
     // Usable now:
     // Now dependencies, AND no variables dependent on blocked.
-    const [independent, dependent] = partition(
-        statement => !statement.freeVariables.has("wrt"),
-        normalized);
+//    const [independent, dependent] = partition(
+//        statement => !statement.freeVariables.has("wrt"),
+//        normalized);
 
+//    const bindingNames = statements
+//        .flatMap(statement => statement.blockBindingNames.keySeq().toArray());
+
+//console.log(bindingNames);
+
+    // Usable now:
+    // Now dependencies, AND no variables dependent on blocked.
+//    const [independent, dependent] = partition(
+//        statement => !statement.freeVariables.has("wrt"),
+//        normalized);
+
+
+    return [...unblocked, ...blocked];
     return [...independent, ...dependent];
 
-    return normalized;
+    return normalized;*/
 }
 
 function fromDeclarationStatements_(statements)
@@ -206,7 +329,7 @@ const isResultStatement = statement =>
     t.isReturnStatement(statement) || t.isThrowStatement(statement);
 
 
-function fromCascadingIfStatements(block)
+function fromCascadingIfStatements(statements)
 {
     // We want to be in single result form:
     // [declaration-1, declaration-2, ..., declaration-N, result]
@@ -228,8 +351,7 @@ function fromCascadingIfStatements(block)
     // [d1, d2, ..., fIf (test, () => [s], () => [s1, s2, ..., sN, result])]
 
     // Start by finding the first if-gaurded early return.
-    const statements = block.body;
-    const firstIf = statements.findIndex(t.isIfStatement);
+    const firstIf = statements.findIndex(is(Node.IfStatement));
 
     // If we have no if statements, it's pretty easy, just handle the
     // declarations and final result.
@@ -321,6 +443,83 @@ function fromDeclarationStatements_(statements)
                 fExpression,
                 ...dependencies.map(({ node }) => node)))]);
 }
+
+
+
+function liftParallelExpression(statement)
+{
+    const keyPaths = statement.freeVariables.get("wrt", List(KeyPath)());
+
+    if (keyPaths.size <= 0)
+        return statement;
+
+    const [keyPath] = keyPaths;
+    const [trueCalleeKeyPath, parent] = KeyPath.getJust(-2, keyPath, statement);
+
+    if (!is (Node.CallExpression, parent)  ||
+        trueCalleeKeyPath.length !== 2 ||
+        trueCalleeKeyPath.key !== "callee" ||
+        trueCalleeKeyPath.child.key !== "object")    
+        return fail("wrt[] can only appear in function calls.");
+
+    if (!is (Node.ComputedMemberExpression, parent.callee))
+        return fail("wrt[] expressions must be of the form wrt[expression]");
+
+    const trueCallee = parent.callee.property;
+    const trueCallExpression =
+        Node.CallExpression({ ...parent, callee: trueCallee });
+
+    return KeyPath.setJust(-2, keyPath, trueCallExpression, statement);
+}
+
+/*
+    const directCall = 
+
+    const [memberKeyPath, parent] =
+        KeyPath.getJust(keyPath, owningCall, remainingKeyPath.length - 1);
+
+    if (!is (Node.ComputedMemberExpression, parent) ||
+        remainingKeyPath.key !== "callee" ||
+        remainingKeyPath.child.key !== "object")
+        throw Error("BAD wrt[]");
+
+    const swapped = 
+
+    return 
+                !is (Node.IdentifierExpression, owner.object))
+        
+            expression.object.name === "wrt";
+    if ()
+function liftParallelExpressions(statements)
+{
+    const updated = statements
+        .flatMap(statement => 
+            statement.freeVariables
+                .get("wrt")
+                .
+                .map((keyPath, index) => [`arg-${index}`, keyPath])
+        
+        mapAccum(statement, keyPaths
+            statement.freeVariables
+                .get("wrt")
+                .reduce(([statement, ...rest], keyPaths) =>
+                    keyPaths.reduce(([statement, ...rest], keyPath)
+                        [update(statement, keyPath, node => 
+                            swap(), ...rest, const]
+                        
+
+                        
+            !is (Node.BlockVariableDeclaration, statement) ?
+                statement :
+                statement.declarators
+                    .map(declarator =>
+                        Node.BlockVariableDeclaration
+                            ({ ...statement, declarators: [declarator] })));
+
+    return  updated.length !== statements.length ?
+            updated :
+            statements;
+}*/
 
 function removeEmptyStatements(statements)
 {
