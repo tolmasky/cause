@@ -1,12 +1,12 @@
-const { data, string, is, type } = require("@algebraic/type");
+const { data, union, string, is, type } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const map = require("@algebraic/ast/map");
 const fromBabel = require("@algebraic/ast/from-babel");
 const partition = require("@climb/partition");
 const Node = require("@algebraic/ast/node");
-const { List, Set } = require("@algebraic/collections");
+const { List, Map, Set } = require("@algebraic/collections");
 const StringSet = Set(string);
-const KeyPath = require("@algebraic/ast/key-path");
+const { KeyPath, KeyPathsByName } = require("@algebraic/ast/key-path");
 
 const vernacular = name =>
     name.replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
@@ -107,9 +107,18 @@ function getFreeVariableNames(statement)
     return StringSet(statement.freeVariables.keys());
 }
 
-const BlockingArgument = data `BlockingArgument` (
+
+const ConcurrentStatement = data `ConcurrentStatement` (
     name                    => string,
-    expression              => Node.Expression );
+    expression              => Node.Expression,
+    ([blockBindingNames])   => [KeyPathsByName,
+                                name => KeyPathsByName.just(name)],
+    ([freeVariables])       => [KeyPathsByName,
+                                expression => expression.freeVariables]);
+
+const DependentStatement = union `DependentStatement` (
+    Node.Statement,
+    ConcurrentStatement );
 
 const toVariableDeclaration = ({ name, expression: init }) =>
     Node.BlockVariableDeclaration(
@@ -133,13 +142,17 @@ function fromFunction(functionNode)
         removeEmptyStatements,
         separateVariableDeclarations)(body.body);
     const liftedStatements = normalizedStatements
-        .flatMap(liftParallelExpression)
+        .flatMap(liftParallelExpression);
+        
+    _(liftedStatements, StringSet(body.freeVariables.keys()));
+
+    const trivialStatements = liftedStatements
         .map(statement =>
-            is (BlockingArgument, statement) ?
+            is (ConcurrentStatement, statement) ?
                 toVariableDeclaration(statement) :
                 statement);
 
-    const updatedBody = Node.BlockStatement({ ...body, body: liftedStatements });
+    const updatedBody = Node.BlockStatement({ ...body, body: trivialStatements });
     const NodeType = type.of(functionNode);
 
     return NodeType({ ...functionNode, body: updatedBody });
@@ -149,6 +162,39 @@ function fromFunction(functionNode)
 //    const statements = fromStatements(functionNode.bindingNames, body.body);
 //    console.log(statements);
 
+
+
+function _(statements, independentVariables)
+{
+    // Each statement can represent multiple names, so we need 2 maps:
+    // statement -> dependencies, and names -> statement in order to 
+    // recursively calculate all dependencies.
+    
+    // Initially, this just holds our direct dependencies.
+    const dependencies = Map(DependentStatement, StringSet)
+        (statements.map(statement =>
+            [statement, statement.freeVariables.keySeq().toSet()
+                .subtract(independentVariables)]));
+    const declaringStatements = Map(string, DependentStatement)
+        (statements.flatMap(statement =>
+                statement.blockBindingNames.keySeq()
+                    .map(name => [name, statement]).toArray()));
+    
+    
+/*        (statements
+            .map(statement => [statement.blockBindingNames.keySeq(), statement])
+            .flatMap(([keys, statement]) =>
+                keys.toArray().map(key => [key, statement])));
+/*
+        (statements.flatMap(statement =>
+            statement.blockBindingNames.keySeq().map(name => [name, statement]).toArray()));
+*/          
+//    console.log(Map(string, DependentStatement)(statements.flatMap(statement =>
+//            statement.blockBindingNames.keySeq().map(name => [name, "SOMETHING"]).toArray())).keySeq().toArray())
+
+    console.log([...dependencies.values()]);
+    console.log(declaringStatements.keySeq().toArray());
+}
 
 
 var global_num = 0;
@@ -178,7 +224,7 @@ function liftParallelExpression(statement)
         const { id, init: expression } = declarator;
 
         if (is (Node.IdentifierPattern, id) && expression === parent)
-            return [BlockingArgument({ name: id.name, expression })];
+            return [ConcurrentStatement({ name: id.name, expression })];
     }
 
     const trueCallee = parent.callee.property;
@@ -187,7 +233,7 @@ function liftParallelExpression(statement)
 
     const name = "MADE_UP_" + (global_num++);
     const argument =
-        BlockingArgument({ name, expression: trueCallExpression });
+        ConcurrentStatement({ name, expression: trueCallExpression });
     const variable = Node.IdentifierExpression({ name });
     const replaced = KeyPath.setJust(-2, keyPath, variable, statement);
 
