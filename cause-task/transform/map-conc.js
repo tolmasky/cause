@@ -1,4 +1,4 @@
-const { string, is, type } = require("@algebraic/type");
+const { data, string, is, type } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const map = require("@algebraic/ast/map");
 const fromBabel = require("@algebraic/ast/from-babel");
@@ -152,13 +152,20 @@ function fromFunction(functionNode)
         removeEmptyStatements,
         separateVariableDeclarations)(body.body);
         
-    const liftedStatements = normalizedStatements.map(liftParallelExpression);
-
+    const lifted = normalizedStatements.map(liftParallelExpression);
+    const dependencies = lifted
+        .flatMap(([dependencies]) => dependencies)
+        .map(({ name, expression }) => Node.VariableDeclarator
+            ({ id: Node.IdentifierPattern({ name }), init: expression }))
+        .map(declarator =>
+             Node.BlockVariableDeclaration({ kind: "const", declarators: [declarator] }));
+    const dedependencied = lifted.flatMap(([, statements]) => statements);
+    const reconstituted = [...dependencies, ...dedependencied];
     
 //    const blockBindingNames = 
 //    const statements = fromStatements(functionNode.bindingNames, body.body);
 //    console.log(statements);
-    const updatedBody = Node.BlockStatement({ ...body, body: liftedStatements });
+    const updatedBody = Node.BlockStatement({ ...body, body: reconstituted });
     const NodeType = type.of(functionNode);
 
     return NodeType({ ...functionNode, body: updatedBody });
@@ -445,16 +452,19 @@ function fromDeclarationStatements_(statements)
 }
 
 
+const Dependency = data `Dependency` (
+    name        => string,
+    expression  => Node.Expression );
 
 function liftParallelExpression(statement)
 {
     const keyPaths = statement.freeVariables.get("wrt", List(KeyPath)());
 
     if (keyPaths.size <= 0)
-        return statement;
+        return [[], [statement]];
 
     const [keyPath] = keyPaths;
-    const [trueCalleeKeyPath, parent] = KeyPath.getJust(-2, keyPath, statement);
+    const [parent, trueCalleeKeyPath] = KeyPath.getJust(-2, keyPath, statement);
 
     if (!is (Node.CallExpression, parent)  ||
         trueCalleeKeyPath.length !== 2 ||
@@ -465,11 +475,25 @@ function liftParallelExpression(statement)
     if (!is (Node.ComputedMemberExpression, parent.callee))
         return fail("wrt[] expressions must be of the form wrt[expression]");
 
+    if (is (Node.BlockVariableDeclaration, statement))
+    {
+        const [declarator] = statement.declarators;
+        const { id, init: expression } = declarator;
+
+        if (is (Node.IdentifierPattern, id) && expression === parent)
+            return [[Dependency({ name: id.name, expression })], []];
+    }
+
     const trueCallee = parent.callee.property;
     const trueCallExpression =
         Node.CallExpression({ ...parent, callee: trueCallee });
 
-    return KeyPath.setJust(-2, keyPath, trueCallExpression, statement);
+    const dependency =
+        Dependency({ name: "MADE_UP", expression: trueCallExpression });
+    const variable = Node.IdentifierExpression({ name: "MADE_UP" });
+    const immediate = KeyPath.setJust(-2, keyPath, variable, statement);
+
+    return [[dependency], [immediate]];
 }
 
 /*
