@@ -1,4 +1,4 @@
-const { data, union, string, is, type } = require("@algebraic/type");
+const { data, number, union, string, is, type } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const map = require("@algebraic/ast/map");
 const fromBabel = require("@algebraic/ast/from-babel");
@@ -7,6 +7,8 @@ const Node = require("@algebraic/ast/node");
 const { List, Map, Set } = require("@algebraic/collections");
 const StringSet = Set(string);
 const { KeyPath, KeyPathsByName } = require("@algebraic/ast/key-path");
+const DenseIntSet = require("./dense-int-set");
+const reachability = require("./dfs-reachability");
 
 const vernacular = name =>
     name.replace(/(?!^)[A-Z](?![A-Z])/g, ch => ` ${ch.toLowerCase()}`);
@@ -166,12 +168,60 @@ function fromFunction(functionNode)
 
 function _(statements, independentVariables)
 {
+    // Separate out the concurrent statements from the rest. Ultimately it is
+    // only the concurrent "dependencies" that will matter to us.
+    const [concurrent, rest] = partition(is(ConcurrentStatement), statements);
+
+    // We "sort" by just putting concurrent statements first. This is because
+    // we want them to have contiguous IDs so that they can fit in as few slots
+    // of a DenseIntSet as possible once we remove all the non-concurrent
+    // statements. Otherwise, we could have a bunch of empty slots for no
+    // reason.
+    const sorted = [...concurrent, ...rest];
+    const indexes = Map(DependentStatement, number)
+        (sorted.map((statement, index) => [statement, index]));
+
+    // We create a mapping from the binding names exposed by a statement to that
+    // statement. So, a statement like:
+    //
+    // "const {a,b} = x;"
+    //
+    // will generate two entries:
+    //
+    // ["a", "const {a,b} = x;"] and ["b", "const {a,b} = x;"].
+    //
+    // We can have many binding names pointing to the same statement, but we
+    // assume the opposite isn't possible since it is a syntax error to
+    // redeclare a const, and we treat function declarations as consts in
+    // concurrent contexts.
+    const declarations = Map(string, DependentStatement)(sorted
+        .map(statement =>
+            [statement, statement.blockBindingNames.keySeq()])
+        .flatMap(([statement, names]) =>
+            names.map(name => [name, statement]).toArray()));
+
+    // We create an adjacency list for each statement by finding the originating
+    // declaration for each free variable in the statement. If the free variable
+    // has no originating declaration, then it is a "true free variable" in the
+    // sense that it is defined outside this block, and so we just ignore it
+    // since it won't affect our calculations at all.
+    const adjacencies = sorted
+        .map(statement => statement
+            .freeVariables.keySeq()
+            .map(name => declarations.get(name))
+            .filter(declaration => !!declaration)
+            .map(declaration => indexes.get(declaration)))
+        .map(DenseIntSet.from);
+
+    const dependencies = reachability(adjacencies);
+//console.log(dependencies.map(set => DenseIntSet.toArray(set)));
+
     // Each statement can represent multiple names, so we need 2 maps:
     // statement -> dependencies, and names -> statement in order to 
     // recursively calculate all dependencies.
     
     // Initially, this just holds our direct dependencies.
-    const dependencies = Map(DependentStatement, StringSet)
+/*    const dependencies = Map(DependentStatement, StringSet)
         (statements.map(statement =>
             [statement, statement.freeVariables.keySeq().toSet()
                 .subtract(independentVariables)]));
@@ -179,7 +229,7 @@ function _(statements, independentVariables)
         (statements.flatMap(statement =>
                 statement.blockBindingNames.keySeq()
                     .map(name => [name, statement]).toArray()));
-    
+*/
     
 /*        (statements
             .map(statement => [statement.blockBindingNames.keySeq(), statement])
@@ -192,10 +242,54 @@ function _(statements, independentVariables)
 //    console.log(Map(string, DependentStatement)(statements.flatMap(statement =>
 //            statement.blockBindingNames.keySeq().map(name => [name, "SOMETHING"]).toArray())).keySeq().toArray())
 
-    console.log([...dependencies.values()]);
-    console.log(declaringStatements.keySeq().toArray());
+//    console.log([...dependencies.values()]);
+//    console.log(declaringStatements.keySeq().toArray());
 }
+/*
+a = b,c;
+b = a,d;
+c = e;
 
+
+[b,c].map(..., )*/
+/*
+function (knownDependencies, statement, declaringStatements, independentVariables)
+{
+
+    function getDependencies(knownDependencies, statement)
+    {
+        if (knownDependencies.has(statement))
+            return [knownDependencies, knownDependencies.get(statement)];
+
+        const directDependencies = 
+        knownDependencies.set(statement,
+            statement
+                .freeVariables.keySeq().toSet()
+                .subtract(independentVariables)
+                .reduce((knownDependencies, name) =>
+                    getDependencies(knownDependencies,
+                        declaringStatements.get(name)),
+                    knownDependencies);
+    }
+    
+
+
+
+
+    const directDependencies.reduce((knownDependencies, name) =>
+        getDependencies(
+            knownDependencies,
+            declaringStatements,
+            declaringStatements.get(name),
+            
+            independentVariables),
+             , knownDependencies);
+
+    const directDependencies = directDependencies.get(statement);
+    const 
+    dependencies.get(statement).concat(
+}
+*/
 
 var global_num = 0;
 function liftParallelExpression(statement)
