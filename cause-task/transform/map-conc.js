@@ -168,19 +168,9 @@ function fromFunction(functionNode)
 
 function _(statements, independentVariables)
 {
-    // Separate out the concurrent statements from the rest. Ultimately it is
-    // only the concurrent "dependencies" that will matter to us.
-    const [concurrent, nonConcurrent] =
-        partition(is(ConcurrentStatement), statements);
-
-    // We "sort" by just putting concurrent statements first. This is because
-    // we want them to have contiguous IDs so that they can fit in as few slots
-    // of a DenseIntSet as possible once we remove all the non-concurrent
-    // statements. Otherwise, we could have a bunch of empty slots for no
-    // reason.
-    const sorted = [...concurrent, ...nonConcurrent];
+    // Create a mapping from each statement to it's associated index.
     const indexes = Map(DependentStatement, number)
-        (sorted.map((statement, index) => [statement, index]));
+        (statements.map((statement, index) => [statement, index]));
 
     // We create a mapping from the binding names exposed by a statement to that
     // statement. So, a statement like:
@@ -195,7 +185,7 @@ function _(statements, independentVariables)
     // assume the opposite isn't possible since it is a syntax error to
     // redeclare a const, and we treat function declarations as consts in
     // concurrent contexts.
-    const declarations = Map(string, DependentStatement)(sorted
+    const declarations = Map(string, DependentStatement)(statements
         .map(statement =>
             [statement, statement.blockBindingNames.keySeq()])
         .flatMap(([statement, names]) =>
@@ -211,7 +201,7 @@ function _(statements, independentVariables)
     // that that it is defined outside this block, and so we just ignore it
     // since we can essentially treat it as a constant as it won't affect any of
     // our other calculations at all.
-    const directDependencies = sorted
+    const directDependencies = statements
         .map(statement => statement
             .freeVariables.keySeq()
             .map(name => declarations.get(name))
@@ -229,18 +219,18 @@ function _(statements, independentVariables)
     // as they would endlessly wait for eachother. So we'll go ahead and remove
     // all the non-concurrent indexes from our reachability (dependencies)
     // lists.
-    const nonConcurrentSet = DenseIntSet
-        .from(Array.from(nonConcurrent,
-            (_, index) => index + concurrent.length));
+    const nonConcurrentSet = DenseIntSet.from([...indexes
+        .filter((_, statement) => !is (ConcurrentStatement, statement))
+        .values()]);
 
     // Additionally, this list also always lists a statement as reachable from
     // itself. Instead of having to remember this later, we'll also go ahead and
     // remove it now.
     const concurrentDependencies = allDependencies
         .map((set, index) => DenseIntSet.subtract(
-            DenseIntSet.subtract(set, nonConcurrent),
+            DenseIntSet.subtract(set, nonConcurrentSet),
             DenseIntSet.just(index)));
-    
+
     console.log(allDependencies.map(set => DenseIntSet.toArray(set)));
     console.log(concurrentDependencies.map(set => DenseIntSet.toArray(set)));
 //console.log(dependencies.map(set => DenseIntSet.toArray(set)));
