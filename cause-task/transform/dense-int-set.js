@@ -28,16 +28,12 @@ const DenseIntSet =
             index < shorter.length ?
             value | shorter[index] : value)),
 
-    intersection: (lhs, rhs) => ordered(lhs, rhs, function (shorter, longer)
-    {
-        const uncompressed = shorter.map((value, index) => value & longer[index]);
-        const shift = uncompressed.length - 1;
-        const index = shift - uncompressed
-            .findIndex((_, index) => uncompressed[shift - index] !== 0);
+    intersection: (lhs, rhs) => ordered(lhs, rhs, (shorter, longer) =>
+        compress(shorter.map((value, index) => value & longer[index]))),
 
-        return  index === uncompressed.length ? uncompressed :
-                index < uncompressed.length ? uncompressed.slice(0, index + 1) : [];
-    }),
+    subtract: (lhs, rhs) =>
+        rhs.length === 0 ? lhs :
+        compress(lhs.map((lhsValue, slot) => lhsValue & ~rhs[slot])),
 
     from: iterable => iterable.reduce((set, number) =>
         DenseIntSet.union(set, DenseIntSet.just(number)),
@@ -50,5 +46,15 @@ const DenseIntSet =
             flattened),
         [])
 };
+
+function compress(uncompressed)
+{
+    const shift = uncompressed.length - 1;
+    const index = shift - uncompressed
+        .findIndex((_, index) => uncompressed[shift - index] !== 0);
+
+    return  index === uncompressed.length ? uncompressed :
+            index < uncompressed.length ? uncompressed.slice(0, index + 1) : [];
+}
 
 module.exports = DenseIntSet;

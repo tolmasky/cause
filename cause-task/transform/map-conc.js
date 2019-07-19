@@ -170,14 +170,15 @@ function _(statements, independentVariables)
 {
     // Separate out the concurrent statements from the rest. Ultimately it is
     // only the concurrent "dependencies" that will matter to us.
-    const [concurrent, rest] = partition(is(ConcurrentStatement), statements);
+    const [concurrent, nonConcurrent] =
+        partition(is(ConcurrentStatement), statements);
 
     // We "sort" by just putting concurrent statements first. This is because
     // we want them to have contiguous IDs so that they can fit in as few slots
     // of a DenseIntSet as possible once we remove all the non-concurrent
     // statements. Otherwise, we could have a bunch of empty slots for no
     // reason.
-    const sorted = [...concurrent, ...rest];
+    const sorted = [...concurrent, ...nonConcurrent];
     const indexes = Map(DependentStatement, number)
         (sorted.map((statement, index) => [statement, index]));
 
@@ -200,12 +201,17 @@ function _(statements, independentVariables)
         .flatMap(([statement, names]) =>
             names.map(name => [name, statement]).toArray()));
 
-    // We create an adjacency list for each statement by finding the originating
-    // declaration for each free variable in the statement. If the free variable
-    // has no originating declaration, then it is a "true free variable" in the
-    // sense that it is defined outside this block, and so we just ignore it
-    // since it won't affect our calculations at all.
-    const adjacencies = sorted
+    // We create a "map" (since the keys are contiguous indexes we just use an
+    // array) of all the direct dependencies. This is otherwise known as an
+    // adjacency list: a list of all the nodes this node is connected to.
+    // 
+    // We compute this for each statement by finding the originating declaration
+    // for each free variable in the statement. If the free variable has no free
+    // originating declaration, then it is a "true free variable" in the sense
+    // that that it is defined outside this block, and so we just ignore it
+    // since we can essentially treat it as a constant as it won't affect any of
+    // our other calculations at all.
+    const directDependencies = sorted
         .map(statement => statement
             .freeVariables.keySeq()
             .map(name => declarations.get(name))
@@ -213,7 +219,30 @@ function _(statements, independentVariables)
             .map(declaration => indexes.get(declaration)))
         .map(DenseIntSet.from);
 
-    const dependencies = reachability(adjacencies);
+    // Now we can calculate *all* the dependencies (including the indirect
+    // dependencies) by doing a Depth-First Reachability Search.
+    const allDependencies = reachability(directDependencies);
+
+    // This list actually has more information than we are interested in
+    // however. We only really care about the reachability to concurrent
+    // statements. Otherwise mutually valid recursive declarations would break
+    // as they would endlessly wait for eachother. So we'll go ahead and remove
+    // all the non-concurrent indexes from our reachability (dependencies)
+    // lists.
+    const nonConcurrentSet = DenseIntSet
+        .from(Array.from(nonConcurrent,
+            (_, index) => index + concurrent.length));
+
+    // Additionally, this list also always lists a statement as reachable from
+    // itself. Instead of having to remember this later, we'll also go ahead and
+    // remove it now.
+    const concurrentDependencies = allDependencies
+        .map((set, index) => DenseIntSet.subtract(
+            DenseIntSet.subtract(set, nonConcurrent),
+            DenseIntSet.just(index)));
+    
+    console.log(allDependencies.map(set => DenseIntSet.toArray(set)));
+    console.log(concurrentDependencies.map(set => DenseIntSet.toArray(set)));
 //console.log(dependencies.map(set => DenseIntSet.toArray(set)));
 
     // Each statement can represent multiple names, so we need 2 maps:
