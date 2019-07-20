@@ -109,8 +109,11 @@ function getFreeVariableNames(statement)
     return StringSet(statement.freeVariables.keys());
 }
 
+const DependentElement = data `DependentElement` (
+    element         => ConcurrentElement,
+    dependencies    => Array );
 
-const ConcurrentStatement = data `ConcurrentStatement` (
+const ConcurrentSource = data `ConcurrentSource` (
     name                    => string,
     expression              => Node.Expression,
     ([blockBindingNames])   => [KeyPathsByName,
@@ -118,9 +121,9 @@ const ConcurrentStatement = data `ConcurrentStatement` (
     ([freeVariables])       => [KeyPathsByName,
                                 expression => expression.freeVariables]);
 
-const DependentStatement = union `DependentStatement` (
+const ConcurrentElement = union `ConcurrentElement` (
     Node.Statement,
-    ConcurrentStatement );
+    ConcurrentSource );
 
 const toVariableDeclaration = ({ name, expression: init }) =>
     Node.BlockVariableDeclaration(
@@ -146,11 +149,14 @@ function fromFunction(functionNode)
     const liftedStatements = normalizedStatements
         .flatMap(liftParallelExpression);
         
-    _(liftedStatements, StringSet(body.freeVariables.keys()));
+    const [indexes, dependentElements] =
+        toDependentElements(liftedStatements);
+
+console.log(dependentElements.map(({ dependencies }) => DenseIntSet.toArray(dependencies)));
 
     const trivialStatements = liftedStatements
         .map(statement =>
-            is (ConcurrentStatement, statement) ?
+            is (ConcurrentSource, statement) ?
                 toVariableDeclaration(statement) :
                 statement);
 
@@ -166,14 +172,24 @@ function fromFunction(functionNode)
 
 
 
-function _(statements, independentVariables)
+function toDependentElements(elements)
 {
-    // Create a mapping from each statement to it's associated index.
-    const indexes = Map(DependentStatement, number)
-        (statements.map((statement, index) => [statement, index]));
+    // Separate out the concurrent sources from the rest. Ultimately it is only
+    // the concurrent source "dependencies" that will matter to us.
+    const [sources, nonSources] = partition(is(ConcurrentSource), elements);
 
-    // We create a mapping from the binding names exposed by a statement to that
-    // statement. So, a statement like:
+    // We "sort" by just putting concurrent sources first. This is because we
+    // want them to have contiguous IDs (indexes) so that they can fit in as few
+    // slots of a DenseIntSet as possible once we remove all the non-source
+    // elements. Otherwise, we could have a bunch of empty slots for no reason.
+    const sorted = [...sources, ...nonSources];
+
+    // Create a mapping from each element to it's associated sorted index.
+    const indexes = Map(ConcurrentElement, number)
+        (sorted.map((element, index) => [element, index]));
+
+    // We create a mapping from the binding names exposed by an element to that
+    // element. So, a statement like:
     //
     // "const {a,b} = x;"
     //
@@ -181,13 +197,13 @@ function _(statements, independentVariables)
     //
     // ["a", "const {a,b} = x;"] and ["b", "const {a,b} = x;"].
     //
-    // We can have many binding names pointing to the same statement, but we
-    // assume the opposite isn't possible since it is a syntax error to
-    // redeclare a const, and we treat function declarations as consts in
-    // concurrent contexts.
-    const declarations = Map(string, DependentStatement)(statements
-        .map(statement =>
-            [statement, statement.blockBindingNames.keySeq()])
+    // We can have many binding names pointing to the same element, but we
+    // assume the opposite isn't possible since it is a syntax error to redclare
+    // a const, and we treat function declarations as consts in concurrent
+    // contexts.
+    const declarations = Map(string, ConcurrentElement)(sorted
+        .map(element =>
+            [element, element.blockBindingNames.keySeq()])
         .flatMap(([statement, names]) =>
             names.map(name => [name, statement]).toArray()));
 
@@ -201,7 +217,7 @@ function _(statements, independentVariables)
     // that that it is defined outside this block, and so we just ignore it
     // since we can essentially treat it as a constant as it won't affect any of
     // our other calculations at all.
-    const directDependencies = statements
+    const directDependencies = sorted
         .map(statement => statement
             .freeVariables.keySeq()
             .map(name => declarations.get(name))
@@ -219,51 +235,29 @@ function _(statements, independentVariables)
     // as they would endlessly wait for eachother. So we'll go ahead and remove
     // all the non-concurrent indexes from our reachability (dependencies)
     // lists.
-    const nonConcurrentSet = DenseIntSet.from([...indexes
-        .filter((_, statement) => !is (ConcurrentStatement, statement))
-        .values()]);
+    const nonSourcesSet = DenseIntSet
+        .from(Array.from(nonSources,
+            (_, index) => index + sources.length));
 
     // Additionally, this list also always lists a statement as reachable from
     // itself. Instead of having to remember this later, we'll also go ahead and
     // remove it now.
     const concurrentDependencies = allDependencies
         .map((set, index) => DenseIntSet.subtract(
-            DenseIntSet.subtract(set, nonConcurrentSet),
+            DenseIntSet.subtract(set, nonSourcesSet),
             DenseIntSet.just(index)));
 
-    console.log(allDependencies.map(set => DenseIntSet.toArray(set)));
-    console.log(concurrentDependencies.map(set => DenseIntSet.toArray(set)));
-//console.log(dependencies.map(set => DenseIntSet.toArray(set)));
+    const dependentElements = elements
+        .map(element =>
+            [element, concurrentDependencies[indexes.get(element)]])
+        .map(([element, dependencies]) =>
+            DependentElement({ element, dependencies }));
 
-    // Each statement can represent multiple names, so we need 2 maps:
-    // statement -> dependencies, and names -> statement in order to 
-    // recursively calculate all dependencies.
-    
-    // Initially, this just holds our direct dependencies.
-/*    const dependencies = Map(DependentStatement, StringSet)
-        (statements.map(statement =>
-            [statement, statement.freeVariables.keySeq().toSet()
-                .subtract(independentVariables)]));
-    const declaringStatements = Map(string, DependentStatement)
-        (statements.flatMap(statement =>
-                statement.blockBindingNames.keySeq()
-                    .map(name => [name, statement]).toArray()));
-*/
-    
-/*        (statements
-            .map(statement => [statement.blockBindingNames.keySeq(), statement])
-            .flatMap(([keys, statement]) =>
-                keys.toArray().map(key => [key, statement])));
-/*
-        (statements.flatMap(statement =>
-            statement.blockBindingNames.keySeq().map(name => [name, statement]).toArray()));
-*/          
-//    console.log(Map(string, DependentStatement)(statements.flatMap(statement =>
-//            statement.blockBindingNames.keySeq().map(name => [name, "SOMETHING"]).toArray())).keySeq().toArray())
-
-//    console.log([...dependencies.values()]);
-//    console.log(declaringStatements.keySeq().toArray());
+    return [indexes, dependentElements];
 }
+
+
+//[statements] Map(Statement, Dependencies)
 /*
 a = b,c;
 b = a,d;
@@ -337,7 +331,7 @@ function liftParallelExpression(statement)
         const { id, init: expression } = declarator;
 
         if (is (Node.IdentifierPattern, id) && expression === parent)
-            return [ConcurrentStatement({ name: id.name, expression })];
+            return [ConcurrentSource({ name: id.name, expression })];
     }
 
     const trueCallee = parent.callee.property;
@@ -346,7 +340,7 @@ function liftParallelExpression(statement)
 
     const name = "MADE_UP_" + (global_num++);
     const argument =
-        ConcurrentStatement({ name, expression: trueCallExpression });
+        ConcurrentSource({ name, expression: trueCallExpression });
     const variable = Node.IdentifierExpression({ name });
     const replaced = KeyPath.setJust(-2, keyPath, variable, statement);
 
