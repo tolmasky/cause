@@ -16,6 +16,8 @@ const DenseIntSet =
 {
     Empty: [],
 
+    isEmpty: set => set.length === 0,
+
     has: (number, set) => toSlot(number, slot =>
         slot < set.length && !!(set[slot] & inSlot(number))),
 
@@ -32,6 +34,7 @@ const DenseIntSet =
         compress(shorter.map((value, index) => value & longer[index]))),
 
     subtract: (lhs, rhs) =>
+        lhs.length === 0 ? lhs :
         rhs.length === 0 ? lhs :
         compress(lhs.map((lhsValue, slot) => lhsValue & ~rhs[slot])),
 
@@ -53,7 +56,7 @@ function compress(uncompressed)
     const index = shift - uncompressed
         .findIndex((_, index) => uncompressed[shift - index] !== 0);
 
-    return  index === uncompressed.length ? uncompressed :
+    return  index === uncompressed.length ? [] :
             index < uncompressed.length ? uncompressed.slice(0, index + 1) : [];
 }
 

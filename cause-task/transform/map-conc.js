@@ -152,6 +152,8 @@ function fromFunction(functionNode)
     const [indexes, dependentElements] =
         toDependentElements(liftedStatements);
 
+    _(indexes, dependentElements, DenseIntSet.Empty);
+
 console.log(dependentElements.map(({ dependencies }) => DenseIntSet.toArray(dependencies)));
 
     const trivialStatements = liftedStatements
@@ -170,6 +172,18 @@ console.log(dependentElements.map(({ dependencies }) => DenseIntSet.toArray(depe
 //    const statements = fromStatements(functionNode.bindingNames, body.body);
 //    console.log(statements);
 
+function _(indexes, elements, available)
+{
+    const [unblocked, blocked] = partition(element =>
+        DenseIntSet.isEmpty(
+        DenseIntSet.subtract(element.dependencies, available)),
+        elements);
+    console.log(unblocked);
+    console.log(elements);
+    const [sources, statements] = partition(element => is(ConcurrentSource, element.element), unblocked);
+
+    console.log(sources.map(({ element }) => element));
+}
 
 
 function toDependentElements(elements)
