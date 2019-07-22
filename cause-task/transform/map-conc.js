@@ -109,10 +109,6 @@ function getFreeVariableNames(statement)
     return StringSet(statement.freeVariables.keys());
 }
 
-const DependentElement = data `DependentElement` (
-    element         => ConcurrentElement,
-    dependencies    => Array );
-
 const ConcurrentSource = data `ConcurrentSource` (
     name                    => string,
     expression              => Node.Expression,
@@ -121,9 +117,18 @@ const ConcurrentSource = data `ConcurrentSource` (
     ([freeVariables])       => [KeyPathsByName,
                                 expression => expression.freeVariables]);
 
-const ConcurrentElement = union `ConcurrentElement` (
-    Node.Statement,
+const ConcurrentNode = union `ConcurrentNode` (
+    Node.BlockVariableDeclaration,
+    Node.ExpressionStatement,
+    Node.ReturnStatement,
+    Node.ThrowStatement,
+    Node.TryStatement,
     ConcurrentSource );
+
+const DependentNode = data  `DependentNode` (
+    id              => number,
+    node            => ConcurrentNode,
+    dependencies    => Array );
 
 const toVariableDeclaration = ({ name, expression: init }) =>
     Node.BlockVariableDeclaration(
@@ -149,12 +154,11 @@ function fromFunction(functionNode)
     const liftedStatements = normalizedStatements
         .flatMap(liftParallelExpression);
         
-    const [indexes, dependentElements] =
-        toDependentElements(liftedStatements);
+    const dependentNodes = toDependentNodes(liftedStatements);
 
-    _(indexes, dependentElements, DenseIntSet.Empty);
+    _(dependentNodes, DenseIntSet.Empty);
 
-console.log(dependentElements.map(({ dependencies }) => DenseIntSet.toArray(dependencies)));
+console.log(dependentNodes.map(({ dependencies }) => DenseIntSet.toArray(dependencies)));
 
     const trivialStatements = liftedStatements
         .map(statement =>
@@ -178,19 +182,21 @@ function _(indexes, elements, available)
         DenseIntSet.isEmpty(
         DenseIntSet.subtract(element.dependencies, available)),
         elements);
-    console.log(unblocked);
-    console.log(elements);
-    const [sources, statements] = partition(element => is(ConcurrentSource, element.element), unblocked);
+
+    const [sources, nonSources] =
+        partition(element => is(ConcurrentSource, element.element), unblocked);
+
+//    return [...statements];
 
     console.log(sources.map(({ element }) => element));
 }
 
 
-function toDependentElements(elements)
+function toDependentNodes(nodes)
 {
     // Separate out the concurrent sources from the rest. Ultimately it is only
     // the concurrent source "dependencies" that will matter to us.
-    const [sources, nonSources] = partition(is(ConcurrentSource), elements);
+    const [sources, nonSources] = partition(is(ConcurrentSource), nodes);
 
     // We "sort" by just putting concurrent sources first. This is because we
     // want them to have contiguous IDs (indexes) so that they can fit in as few
@@ -199,8 +205,8 @@ function toDependentElements(elements)
     const sorted = [...sources, ...nonSources];
 
     // Create a mapping from each element to it's associated sorted index.
-    const indexes = Map(ConcurrentElement, number)
-        (sorted.map((element, index) => [element, index]));
+    const indexes = Map(ConcurrentNode, number)
+        (sorted.map((node, index) => [node, index]));
 
     // We create a mapping from the binding names exposed by an element to that
     // element. So, a statement like:
@@ -215,11 +221,11 @@ function toDependentElements(elements)
     // assume the opposite isn't possible since it is a syntax error to redclare
     // a const, and we treat function declarations as consts in concurrent
     // contexts.
-    const declarations = Map(string, ConcurrentElement)(sorted
-        .map(element =>
-            [element, element.blockBindingNames.keySeq()])
-        .flatMap(([statement, names]) =>
-            names.map(name => [name, statement]).toArray()));
+    const declarations = Map(string, ConcurrentNode)(sorted
+        .map(node =>
+            [node, node.blockBindingNames.keySeq()])
+        .flatMap(([node, names]) =>
+            names.map(name => [name, node]).toArray()));
 
     // We create a "map" (since the keys are contiguous indexes we just use an
     // array) of all the direct dependencies. This is otherwise known as an
@@ -261,13 +267,11 @@ function toDependentElements(elements)
             DenseIntSet.subtract(set, nonSourcesSet),
             DenseIntSet.just(index)));
 
-    const dependentElements = elements
-        .map(element =>
-            [element, concurrentDependencies[indexes.get(element)]])
-        .map(([element, dependencies]) =>
-            DependentElement({ element, dependencies }));
-
-    return [indexes, dependentElements];
+    return nodes
+        .map(node => [node, indexes.get(node)])
+        .map(([node, id]) => [node, id, concurrentDependencies[id]])
+        .map(([node, id, dependencies]) =>
+            DependentNode({ id, node, dependencies }));
 }
 
 
