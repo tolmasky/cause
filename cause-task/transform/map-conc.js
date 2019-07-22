@@ -19,8 +19,13 @@ const forbid = (...names) => Object.fromEntries(names
 const unexpected = node => fail.syntax(
     `${vernacular(node.type)}s are not allowed at this point in concurrent functions.`);
 
-const DependMemberExpression = parse.expression("δ.depend");
+const DependCallee = parse.expression("δ.depend");
+const SuccessCallee = parse.expression("δ.success");
 
+const t_success = value =>
+    Node.CallExpression({ callee: SuccessCallee, arguments:[value] });
+const t_successReturn = ({ argument, ...rest }) =>
+    Node.ReturnStatement({ ...rest, argument: t_success(argument) });
 
 const template = require("./template");
 const toComputedProperty = ({ computed, property }) =>
@@ -178,7 +183,10 @@ function fromFunction(functionNode)
 function toFunctionBody(taskChain)
 {
     if (is (DependencyChain.End, taskChain))
-        return Node.BlockStatement({ body: taskChain.statements });
+        return Node.BlockStatement({ body:
+            taskChain.statements.map(statement =>
+                is (Node.ReturnStatement, statement) ?
+                    t_successReturn(statement) : statement) });
 
     const { tasks } = taskChain;
     const thenFunction = Node.FunctionExpression(
@@ -189,7 +197,7 @@ function toFunctionBody(taskChain)
     });
     const dependStatement = Node.CallExpression(
     {
-        callee: DependMemberExpression,
+        callee: DependCallee,
         arguments: [thenFunction, ...tasks.map(task => task.expression)]
     });
     const returnStatement = Node.ReturnStatement({ argument: dependStatement });
