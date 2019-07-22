@@ -1,6 +1,7 @@
 const { data, number, union, string, is, type } = require("@algebraic/type");
 const fail = require("@algebraic/type/fail");
 const map = require("@algebraic/ast/map");
+const parse = require("@algebraic/ast/parse");
 const fromBabel = require("@algebraic/ast/from-babel");
 const partition = require("@climb/partition");
 const Node = require("@algebraic/ast/node");
@@ -17,6 +18,8 @@ const forbid = (...names) => Object.fromEntries(names
         `${vernacular(name)}s are not allowed in concurrent functions.`)]));
 const unexpected = node => fail.syntax(
     `${vernacular(node.type)}s are not allowed at this point in concurrent functions.`);
+
+const DependMemberExpression = parse.expression("δ.depend");
 
 
 const template = require("./template");
@@ -160,19 +163,9 @@ function fromFunction(functionNode)
             [[...accum[0], ...tasks], [...accum[1], ...statements]]);
     const [taskPairs, statementPairs] = toDependencyPairs(tasks, statements);
     const dependencyChain = toDependencyChain(taskPairs, statementPairs);
+    const updatedBody =
+        Node.BlockStatement({ ...body, ...toFunctionBody(dependencyChain) });
 
-    console.log(dependencyChain);
-//    _(dependentNodes, DenseIntSet.Empty);
-
-//console.log(dependentNodes.map(({ dependencies }) => DenseIntSet.toArray(dependencies)));
-/*
-    const trivialStatements = liftedStatements
-        .map(statement =>
-            is (ConcurrentSource, statement) ?
-                toVariableDeclaration(statement) :
-                statement);*/
-//console.log(trivialStatements);
-    const updatedBody = Node.BlockStatement({ ...body, body:[] });
     const NodeType = type.of(functionNode);
 
     return NodeType({ ...functionNode, body: updatedBody });
@@ -181,6 +174,29 @@ function fromFunction(functionNode)
 //    const blockBindingNames =
 //    const statements = fromStatements(functionNode.bindingNames, body.body);
 //    console.log(statements);
+
+function toFunctionBody(taskChain)
+{
+    if (is (DependencyChain.End, taskChain))
+        return Node.BlockStatement({ body: taskChain.statements });
+
+    const { tasks } = taskChain;
+    const thenFunction = Node.FunctionExpression(
+    {
+        id: null,
+        params: tasks.map(Node.IdentifierPattern),
+        body: toFunctionBody(taskChain.next)
+    });
+    const dependStatement = Node.CallExpression(
+    {
+        callee: DependMemberExpression,
+        arguments: [thenFunction, ...tasks.map(task => task.expression)]
+    });
+    const returnStatement = Node.ReturnStatement({ argument: dependStatement });
+    const body = [...taskChain.statements, returnStatement];
+
+    return Node.BlockStatement({ body });
+}
 
 function _(dependents, available, params = [])
 {
