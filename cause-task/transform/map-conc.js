@@ -37,7 +37,9 @@ const t_ds = (...args) => args
     .flatMap((value, index) => value ? [index] : []);
 const tMaybeδ = (value, ds) => ds.length > 0 ? tδ(value, ds) : value;
 
-const tδ_depend = template((lifted, ...args) => δ.depend(lifted, args));
+//const tδ_depend = template((lifted, ...args) => δ.depend(lifted, args));
+
+//const tδ_depend = template((f, ...args) => return δ.depend(false, f, ...args));
 
 const t_thunk = template(expression => () => expression);
 const t_defer = expression =>
@@ -109,7 +111,7 @@ function getFreeVariableNames(statement)
     return StringSet(statement.freeVariables.keys());
 }
 
-const ConcurrentSource = data `ConcurrentSource` (
+const TaskNode = data `TaskNode` (
     name                    => string,
     expression              => Node.Expression,
     ([blockBindingNames])   => [KeyPathsByName,
@@ -123,12 +125,12 @@ const ConcurrentNode = union `ConcurrentNode` (
     Node.ReturnStatement,
     Node.ThrowStatement,
     Node.TryStatement,
-    ConcurrentSource );
+    TaskNode );
 
 const DependentNode = data  `DependentNode` (
     id              => number,
     node            => ConcurrentNode,
-    dependencies    => Array );
+    dependencies    => DenseIntSet );
 
 const toVariableDeclaration = ({ name, expression: init }) =>
     Node.BlockVariableDeclaration(
@@ -151,22 +153,26 @@ function fromFunction(functionNode)
         hoistFunctionDeclarations,
         removeEmptyStatements,
         separateVariableDeclarations)(body.body);
-    const liftedStatements = normalizedStatements
-        .flatMap(liftParallelExpression);
         
-    const dependentNodes = toDependentNodes(liftedStatements);
+    const [tasks, statements] = normalizedStatements
+        .map(toTasksAndStatements)
+        .reduce((accum, [tasks, statements]) =>
+            [[...accum[0], ...tasks], [...accum[1], ...statements]]);
+    const [taskPairs, statementPairs] = toDependencyPairs(tasks, statements);
+    const dependencyChain = toDependencyChain(taskPairs, statementPairs);
 
-    _(dependentNodes, DenseIntSet.Empty);
+    console.log(dependencyChain);
+//    _(dependentNodes, DenseIntSet.Empty);
 
-console.log(dependentNodes.map(({ dependencies }) => DenseIntSet.toArray(dependencies)));
-
+//console.log(dependentNodes.map(({ dependencies }) => DenseIntSet.toArray(dependencies)));
+/*
     const trivialStatements = liftedStatements
         .map(statement =>
             is (ConcurrentSource, statement) ?
                 toVariableDeclaration(statement) :
-                statement);
-
-    const updatedBody = Node.BlockStatement({ ...body, body: trivialStatements });
+                statement);*/
+//console.log(trivialStatements);
+    const updatedBody = Node.BlockStatement({ ...body, body:[] });
     const NodeType = type.of(functionNode);
 
     return NodeType({ ...functionNode, body: updatedBody });
@@ -176,33 +182,51 @@ console.log(dependentNodes.map(({ dependencies }) => DenseIntSet.toArray(depende
 //    const statements = fromStatements(functionNode.bindingNames, body.body);
 //    console.log(statements);
 
-function _(indexes, elements, available)
+function _(dependents, available, params = [])
 {
-    const [unblocked, blocked] = partition(element =>
+    const [unblocked, blocked] = partition(dependent =>
         DenseIntSet.isEmpty(
-        DenseIntSet.subtract(element.dependencies, available)),
-        elements);
+        DenseIntSet.subtract(dependent.dependencies, available)),
+        dependents);
 
-    const [sources, nonSources] =
-        partition(element => is(ConcurrentSource, element.element), unblocked);
+    const [sources, nonSources] = partition(unblocked =>
+        is(ConcurrentSource, unblocked.node),
+        unblocked);
+/*
+    if (sources.length <= 0)
+        return nonSources;
+
+    const immediate = nonSources;
+    const next = blocked.length > 0 ? __ : [];
+
+    const body = Node.BodyStatement({ body: [...immediate, next] });
+    const functionExpression = Node.FunctionExpression({ body, params });
+
+    return Node.ReturnStatement({ argument: functionExpression });
+
+        
+    const rest = blocked.length > 0 ?
+        tδ_depend() :
+        
+
+    return [...nonSources, tδ_depend()
 
 //    return [...statements];
-
+*/
     console.log(sources.map(({ element }) => element));
 }
 
+const DependentData = data `DependentData` (
+    id              => number,
+    dependencies    => Array );
 
-function toDependentNodes(nodes)
-{
-    // Separate out the concurrent sources from the rest. Ultimately it is only
-    // the concurrent source "dependencies" that will matter to us.
-    const [sources, nonSources] = partition(is(ConcurrentSource), nodes);
-
+function toDependencyPairs(tasks, statements)
+{console.log(tasks, statements);
     // We "sort" by just putting concurrent sources first. This is because we
     // want them to have contiguous IDs (indexes) so that they can fit in as few
     // slots of a DenseIntSet as possible once we remove all the non-source
     // elements. Otherwise, we could have a bunch of empty slots for no reason.
-    const sorted = [...sources, ...nonSources];
+    const sorted = [...tasks, ...statements];
 
     // Create a mapping from each element to it's associated sorted index.
     const indexes = Map(ConcurrentNode, number)
@@ -222,8 +246,7 @@ function toDependentNodes(nodes)
     // a const, and we treat function declarations as consts in concurrent
     // contexts.
     const declarations = Map(string, ConcurrentNode)(sorted
-        .map(node =>
-            [node, node.blockBindingNames.keySeq()])
+        .map(node => [node, node.blockBindingNames.keySeq()])
         .flatMap(([node, names]) =>
             names.map(name => [name, node]).toArray()));
 
@@ -255,23 +278,60 @@ function toDependentNodes(nodes)
     // as they would endlessly wait for eachother. So we'll go ahead and remove
     // all the non-concurrent indexes from our reachability (dependencies)
     // lists.
-    const nonSourcesSet = DenseIntSet
-        .from(Array.from(nonSources,
-            (_, index) => index + sources.length));
+    const statementsSet = DenseIntSet
+        .from(Array.from(statements, (_, index) => index + tasks.length));
 
     // Additionally, this list also always lists a statement as reachable from
     // itself. Instead of having to remember this later, we'll also go ahead and
     // remove it now.
     const concurrentDependencies = allDependencies
         .map((set, index) => DenseIntSet.subtract(
-            DenseIntSet.subtract(set, nonSourcesSet),
+            DenseIntSet.subtract(set, statementsSet),
             DenseIntSet.just(index)));
+Error.stackTraceLimit = 1000;
+//console.log(indexes);
+    const toDependentPair = node => (id =>
+        [node, DependentData({ id, dependencies: concurrentDependencies[id] })])
+        (indexes.get(node));
 
-    return nodes
-        .map(node => [node, indexes.get(node)])
-        .map(([node, id]) => [node, id, concurrentDependencies[id]])
-        .map(([node, id, dependencies]) =>
-            DependentNode({ id, node, dependencies }));
+    return [tasks.map(toDependentPair), statements.map(toDependentPair)];
+}
+
+const DependencyChain = union `DependencyChain` (
+    data `End` (
+        statements  => Array ),
+    data `Parent` (
+        tasks       => Array,
+        statements  => Array,
+        next        => DependencyChain ) );
+
+function toDependencyChain(taskPairs, statementPairs, available = DenseIntSet.Empty)
+{
+    if (taskPairs.length === 0)
+        return DependencyChain.End({ statements:
+            statementPairs.map(([node]) => node) });
+console.log(taskPairs.length, statementPairs.length, available);
+    const isBlocked = pair => DenseIntSet
+        .isEmpty(DenseIntSet.subtract(pair[1].dependencies, available));
+
+    const [unblockedTaskPairs, blockedTaskPairs] =
+        partition(isBlocked, taskPairs);
+    const [unblockedStatementPairs, blockedStatementPairs] =
+        partition(isBlocked, statementPairs);
+
+    const tasks = unblockedTaskPairs.map(pair => pair[0]);
+    const statements = unblockedStatementPairs.map(pair => pair[0]);
+
+    const updatedAvailable = DenseIntSet.union(
+        available,
+        DenseIntSet.union(
+            DenseIntSet.from(unblockedTaskPairs.map(pair => pair[1].id)),
+            DenseIntSet.from(unblockedTaskPairs.map(pair => pair[1].id))));
+
+    const next = toDependencyChain(
+        blockedTaskPairs, blockedStatementPairs, updatedAvailable);
+
+    return DependencyChain.Parent({ tasks, statements, next });
 }
 
 
@@ -323,12 +383,12 @@ function (knownDependencies, statement, declaringStatements, independentVariable
 */
 
 var global_num = 0;
-function liftParallelExpression(statement)
+function toTasksAndStatements(statement)
 {
     const keyPaths = statement.freeVariables.get("wrt", List(KeyPath)());
 
     if (keyPaths.size <= 0)
-        return [statement];
+        return [[], [statement]];
 
     const keyPath = keyPaths.reduce((longest, keyPath) =>
         longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
@@ -349,7 +409,7 @@ function liftParallelExpression(statement)
         const { id, init: expression } = declarator;
 
         if (is (Node.IdentifierPattern, id) && expression === parent)
-            return [ConcurrentSource({ name: id.name, expression })];
+            return [[TaskNode({ name: id.name, expression })], []];
     }
 
     const trueCallee = parent.callee.property;
@@ -357,12 +417,12 @@ function liftParallelExpression(statement)
         Node.CallExpression({ ...parent, callee: trueCallee });
 
     const name = "MADE_UP_" + (global_num++);
-    const argument =
-        ConcurrentSource({ name, expression: trueCallExpression });
+    const task = TaskNode({ name, expression: trueCallExpression });
     const variable = Node.IdentifierExpression({ name });
     const replaced = KeyPath.setJust(-2, keyPath, variable, statement);
+    const [tasks, statements] = toTasksAndStatements(replaced);
 
-    return [argument, ...liftParallelExpression(replaced)];
+    return [[task, ...tasks], statements];
 }
 
 function removeEmptyStatements(statements)
