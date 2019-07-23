@@ -427,18 +427,22 @@ function toTasksAndStatements(statement)
     if (!is (Node.ComputedMemberExpression, parent.callee))
         return fail("wrt[] expressions must be of the form wrt[expression]");
 
+    const trueCallee = parent.callee.property;
+    const trueCallExpression =
+        Node.CallExpression({ ...parent, callee: trueCallee });
+
     if (is (Node.BlockVariableDeclaration, statement))
     {
         const [declarator] = statement.declarators;
         const { id, init: expression } = declarator;
 
         if (is (Node.IdentifierPattern, id) && expression === parent)
-            return [[TaskNode({ name: id.name, expression })], []];
-    }
+        {
+            const { name } = id;
 
-    const trueCallee = parent.callee.property;
-    const trueCallExpression =
-        Node.CallExpression({ ...parent, callee: trueCallee });
+            return [[TaskNode({ name, expression: trueCallExpression })], []];
+        }
+    }
 
     const name = "MADE_UP_" + (global_num++);
     const task = TaskNode({ name, expression: trueCallExpression });
