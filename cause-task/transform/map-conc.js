@@ -114,11 +114,6 @@ module.exports = map(
 const isIdentifierExpression = (name, node) =>
     is (Node.IdentifierExpression, node) && node.name === name;
 
-function getFreeVariableNames(statement)
-{
-    return StringSet(statement.freeVariables.keys());
-}
-
 const TaskNode = data `TaskNode` (
     name                    => string,
     expression              => Node.Expression,
@@ -176,10 +171,6 @@ function fromFunction(functionNode)
     return NodeType({ ...functionNode, body: updatedBody });
 }
 
-//    const blockBindingNames =
-//    const statements = fromStatements(functionNode.bindingNames, body.body);
-//    console.log(statements);
-
 function toFunctionBody(taskChain)
 {
     if (is (DependencyChain.End, taskChain))
@@ -206,46 +197,12 @@ function toFunctionBody(taskChain)
     return Node.BlockStatement({ body });
 }
 
-function _(dependents, available, params = [])
-{
-    const [unblocked, blocked] = partition(dependent =>
-        DenseIntSet.isEmpty(
-        DenseIntSet.subtract(dependent.dependencies, available)),
-        dependents);
-
-    const [sources, nonSources] = partition(unblocked =>
-        is(ConcurrentSource, unblocked.node),
-        unblocked);
-/*
-    if (sources.length <= 0)
-        return nonSources;
-
-    const immediate = nonSources;
-    const next = blocked.length > 0 ? __ : [];
-
-    const body = Node.BodyStatement({ body: [...immediate, next] });
-    const functionExpression = Node.FunctionExpression({ body, params });
-
-    return Node.ReturnStatement({ argument: functionExpression });
-
-        
-    const rest = blocked.length > 0 ?
-        tδ_depend() :
-        
-
-    return [...nonSources, tδ_depend()
-
-//    return [...statements];
-*/
-    console.log(sources.map(({ element }) => element));
-}
-
 const DependentData = data `DependentData` (
     id              => number,
     dependencies    => Array );
 
 function toDependencyPairs(tasks, statements)
-{console.log(tasks, statements);
+{
     // We "sort" by just putting concurrent sources first. This is because we
     // want them to have contiguous IDs (indexes) so that they can fit in as few
     // slots of a DenseIntSet as possible once we remove all the non-source
@@ -312,8 +269,7 @@ function toDependencyPairs(tasks, statements)
         .map((set, index) => DenseIntSet.subtract(
             DenseIntSet.subtract(set, statementsSet),
             DenseIntSet.just(index)));
-Error.stackTraceLimit = 1000;
-//console.log(indexes);
+
     const toDependentPair = node => (id =>
         [node, DependentData({ id, dependencies: concurrentDependencies[id] })])
         (indexes.get(node));
@@ -334,7 +290,7 @@ function toDependencyChain(taskPairs, statementPairs, available = DenseIntSet.Em
     if (taskPairs.length === 0)
         return DependencyChain.End({ statements:
             statementPairs.map(([node]) => node) });
-console.log(taskPairs.length, statementPairs.length, available);
+
     const isBlocked = pair => DenseIntSet
         .isEmpty(DenseIntSet.subtract(pair[1].dependencies, available));
 
@@ -357,54 +313,6 @@ console.log(taskPairs.length, statementPairs.length, available);
 
     return DependencyChain.Parent({ tasks, statements, next });
 }
-
-
-//[statements] Map(Statement, Dependencies)
-/*
-a = b,c;
-b = a,d;
-c = e;
-
-
-[b,c].map(..., )*/
-/*
-function (knownDependencies, statement, declaringStatements, independentVariables)
-{
-
-    function getDependencies(knownDependencies, statement)
-    {
-        if (knownDependencies.has(statement))
-            return [knownDependencies, knownDependencies.get(statement)];
-
-        const directDependencies = 
-        knownDependencies.set(statement,
-            statement
-                .freeVariables.keySeq().toSet()
-                .subtract(independentVariables)
-                .reduce((knownDependencies, name) =>
-                    getDependencies(knownDependencies,
-                        declaringStatements.get(name)),
-                    knownDependencies);
-    }
-    
-
-
-
-
-    const directDependencies.reduce((knownDependencies, name) =>
-        getDependencies(
-            knownDependencies,
-            declaringStatements,
-            declaringStatements.get(name),
-            
-            independentVariables),
-             , knownDependencies);
-
-    const directDependencies = directDependencies.get(statement);
-    const 
-    dependencies.get(statement).concat(
-}
-*/
 
 var global_num = 0;
 function toTasksAndStatements(statement)
