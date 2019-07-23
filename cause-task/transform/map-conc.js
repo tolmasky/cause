@@ -324,41 +324,66 @@ function toTasksAndStatements(statement)
 
     const keyPath = keyPaths.reduce((longest, keyPath) =>
         longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
-    const [parent, trueCalleeKeyPath] = KeyPath.getJust(-2, keyPath, statement);
-
-    if (!is (Node.CallExpression, parent)  ||
-        trueCalleeKeyPath.length !== 2 ||
-        trueCalleeKeyPath.key !== "callee" ||
-        trueCalleeKeyPath.child.key !== "object")
-        return fail("wrt[] can only appear in function calls.");
-
-    if (!is (Node.ComputedMemberExpression, parent.callee))
-        return fail("wrt[] expressions must be of the form wrt[expression]");
-
-    const trueCallee = parent.callee.property;
-    const trueCallExpression =
-        Node.CallExpression({ ...parent, callee: trueCallee });
+    const [insertionPoint, newChild, ancestor] =
+        fromArgumentPosition(keyPath, statement) ||
+        fromCalleePosition(keyPath, statement) ||
+        fail("wrt[] can only appear in function calls.");
 
     if (is (Node.BlockVariableDeclaration, statement))
     {
         const [declarator] = statement.declarators;
-        const { id, init: expression } = declarator;
+        const { id, init } = declarator;
 
-        if (is (Node.IdentifierPattern, id) && expression === parent)
-        {
-            const { name } = id;
-
-            return [[TaskNode({ name, expression: trueCallExpression })], []];
-        }
+        if (init === ancestor && is (Node.IdentifierPattern, id))
+            return [[TaskNode({ name: id.name, expression: newChild })], []];
     }
 
     const name = "MADE_UP_" + (global_num++);
-    const task = TaskNode({ name, expression: trueCallExpression });
+    const task = TaskNode({ name, expression: newChild });
     const variable = Node.IdentifierExpression({ name });
-    const replaced = KeyPath.setJust(-2, keyPath, variable, statement);
+    const replaced = KeyPath.setJust(insertionPoint, keyPath, variable, statement);
     const [tasks, statements] = toTasksAndStatements(replaced);
 
     return [[task, ...tasks], statements];
+}
+
+function fromArgumentPosition(keyPath, statement)
+{
+    const [ancestor, remainingKeyPath] =
+        KeyPath.getJust(-3, keyPath, statement);
+
+    if (!is (Node.CallExpression, ancestor) ||
+        remainingKeyPath.key !== "arguments" ||
+        remainingKeyPath.child.child.key !== "object")
+        return false;
+
+    const index = parseInt(keyPath.child.key, 10);console.log(ancestor);
+    const trueArgument = ancestor.arguments[index].property;
+
+    const { callee, arguments: args } =
+        KeyPath.setJust(-1, remainingKeyPath, trueArgument, ancestor);
+    const modified = tδ(callee, [index], args);
+
+    return [-3, modified, ancestor];
+}
+
+function fromCalleePosition(keyPath, statement)
+{
+    const [ancestor, remainingKeyPath] = KeyPath.getJust(-2, keyPath, statement);
+
+    if (!is (Node.CallExpression, ancestor)  ||
+        remainingKeyPath.length !== 2 ||
+        remainingKeyPath.key !== "callee" ||
+        remainingKeyPath.child.key !== "object")
+        return false;//fail("wrt[] can only appear in function calls.");
+
+    if (!is (Node.ComputedMemberExpression, ancestor.callee))
+        return false;//fail("wrt[] expressions must be of the form wrt[expression]");
+
+    const trueCallee = ancestor.callee.property;
+    const modified = Node.CallExpression({ ...ancestor, callee: trueCallee });
+
+    return [-2, modified, ancestor];
 }
 
 function removeEmptyStatements(statements)
