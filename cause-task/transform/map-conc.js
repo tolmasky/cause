@@ -328,10 +328,13 @@ function toTasksAndStatements(statement)
 
     const keyPath = keyPaths.reduce((longest, keyPath) =>
         longest.length > keyPath.length ? longest : keyPath, KeyPath.Root);
-    const [insertionPoint, newChild, ancestor] =
-        fromArgumentPosition(keyPath, statement) ||
-        fromCalleePosition(keyPath, statement) ||
-        fail("wrt[] can only appear in function calls.");
+    const inCalleePosition = KeyPath.at(keyPath, -2) === "callee";
+
+    const [insertionPoint, newChild, ancestor] = inCalleePosition ?
+        fromCalleePosition(keyPath, statement) :
+        fromArgumentPosition(keyPath, statement);
+    
+//        fail("wrt[] can only appear in function calls.");
 
     if (is (Node.BlockVariableDeclaration, statement))
     {
@@ -351,28 +354,36 @@ function toTasksAndStatements(statement)
     return [[task, ...tasks], statements];
 }
 
+const until = function (predicate, transform, start)
+{
+    if (predicate(start))
+        return start;
+
+    return until(predicate, transform, transform(start));    
+}
+
+const unfold = require("./unfold");
+
 function fromArgumentPosition(keyPath, statement)
 {
     const [ancestor, remainingKeyPath] =
         KeyPath.getJust(-3, keyPath, statement);
+        
+    const isWRT = argument =>
+        is (Node.ComputedMemberExpression, argument) &&
+        isIdentifierExpression("wrt", argument.object);
+    const ds = ancestor
+        .arguments
+        .flatMap((argument, index) => isWRT(argument) ? [index] : []);
+    const args = ancestor
+        .arguments
+        .map(argument => isWRT(argument) ? argument.property : argument);
 
-    if (!is (Node.CallExpression, ancestor) ||
-        remainingKeyPath.key !== "arguments" ||
-        remainingKeyPath.child.child.key !== "object")
-        return false;
-
-    const index = parseInt(remainingKeyPath.child.key, 10);
-    const trueArgument = ancestor.arguments[index].property;
-
-    const { callee, arguments: args } =
-        KeyPath.setJust(-1, remainingKeyPath, trueArgument, ancestor);
-    const modified = tδ(callee, [index], args);
-
-    return [-3, modified, ancestor];
+    return [-3, tδ(ancestor.callee, ds, args), ancestor];
 }
 
 function fromCalleePosition(keyPath, statement)
-{
+{    
     const [ancestor, remainingKeyPath] = KeyPath.getJust(-2, keyPath, statement);
 
     if (!is (Node.CallExpression, ancestor)  ||
@@ -435,7 +446,6 @@ function fromCascadingIfStatements(statements)
         Node.BlockStatement({ body: statements.slice(firstIf + 1) });
     const alternateFunction =
         fromFunction(Node.FunctionExpression({ body: alternateBlock }));
-
 
     const argument = Node.CallExpression(
     {

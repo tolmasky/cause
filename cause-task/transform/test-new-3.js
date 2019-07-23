@@ -4,14 +4,36 @@ const parse = require("@algebraic/ast/parse").expression;
 //const node = require("./map-conc")(parse( WRAP+""));
 const node = require("./map-conc")(parse((() => parallel(() =>
 {
-    const a = wrt[b]();
-    const c = wrt[d]() + 7 + wrt[e]();
+    if (wrt[f]())
+        return 5;
 
-    return a;
+    return wrt[c]() + f(wrt[a], wrt[b], wrt[c](d));
 }))+ ""));
 
-console.log(node);
+/*
+    const a = wrt[b]();
+    const c = wrt[d]() + 7 + wrt[e]();
+    
+    if (c)
+        return c + 1;
 
+    const o = f(wrt[a], 10);
+    const x = c.map(wrt[u]);
+    const z = y + m.reduce(wrt[u], 20);
+    const y = 9;
+    const r = 1 + wrt[d](wrt[e]()) - c + y;
+
+    return wrt[a]();*/
+
+/*
+const d = () => "10"
+const a = () => (c,d);
+const c = () => wrt[a()]() + 1;
+
+return c();
+*/
+
+//console.log(node);
 console.log(generate(node));
 
 
