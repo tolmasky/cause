@@ -45,6 +45,9 @@ const t_ds = (...args) => args
     .flatMap((value, index) => value ? [index] : []);
 const tMaybeδ = (value, ds) => ds.length > 0 ? tδ(value, ds) : value;
 
+const tδ_operator = template(name => δ.operators[name]);
+const tδ_wrt = template(expression => wrt[expression]);
+
 //const tδ_depend = template((lifted, ...args) => δ.depend(lifted, args));
 
 //const tδ_depend = template((f, ...args) => return δ.depend(false, f, ...args));
@@ -155,7 +158,8 @@ function fromFunction(functionNode)
     const normalizedStatements = pipe(
         hoistFunctionDeclarations,
         removeEmptyStatements,
-        separateVariableDeclarations)(body.body);
+        separateVariableDeclarations,
+        fromCascadingIfStatements)(body.body);
         
     const [tasks, statements] = normalizedStatements
         .map(toTasksAndStatements)
@@ -357,7 +361,7 @@ function fromArgumentPosition(keyPath, statement)
         remainingKeyPath.child.child.key !== "object")
         return false;
 
-    const index = parseInt(keyPath.child.key, 10);console.log(ancestor);
+    const index = parseInt(remainingKeyPath.child.key, 10);
     const trueArgument = ancestor.arguments[index].property;
 
     const { callee, arguments: args } =
@@ -384,6 +388,65 @@ function fromCalleePosition(keyPath, statement)
     const modified = Node.CallExpression({ ...ancestor, callee: trueCallee });
 
     return [-2, modified, ancestor];
+}
+
+function fromCascadingIfStatements(statements)
+{
+    // We want to be in single result form:
+    // [declaration-1, declaration-2, ..., declaration-N, result]
+    //
+    // However, we *allow* intermediate if-gaurded early results, but we
+    // do so by transforming it into a single return by wrapping everything
+    // after the if-gaurd in an if-function, and return the result of it.
+    //
+    // Code of the form:
+    // [d1, d2, ..., dn, if (test) [s], s1, s2, ..., sN, result]
+    //
+    // Where:
+    // 1. d1, d2, ..., dn are consecutive declarations
+    // 2. if (test) [s] is an if statement that ends in a result.
+    // 3. s1, s2, ..., sN are either declaration or more if-gaurded early
+    //    returns.
+    //
+    // Becomes:
+    // [d1, d2, ..., fIf (test, () => [s], () => [s1, s2, ..., sN, result])]
+
+    // Start by finding the first if-gaurded early return.
+    const firstIf = statements.findIndex(is(Node.IfStatement));
+
+    // If we have no if statements, it's pretty easy, just handle the
+    // declarations and final result.
+    if (firstIf === -1)
+        return statements;
+
+    // If not, then construct the if-function to replace the tail of the
+    // statements with:
+    const { test, consequent } = statements[firstIf];
+    // The consequent is now the body of an arrow function, so it has to be
+    // an expression or block statement. We expect to only have declarations
+    // and return statements, so the special case of a single return
+    // statement can folded into just it's argument.
+    const consequentBlock = is (Node.BlockStatement, consequent) ?
+        consequent : Node.BlockStatement({ body: [consequent] });
+    const consequentFunction =
+        fromFunction(Node.FunctionExpression({ body: consequentBlock }));
+
+    const alternateBlock =
+        Node.BlockStatement({ body: statements.slice(firstIf + 1) });
+    const alternateFunction =
+        fromFunction(Node.FunctionExpression({ body: alternateBlock }));
+
+
+    const argument = Node.CallExpression(
+    {
+        callee: tδ_operator("?:"),
+        arguments: [tδ_wrt(consequentFunction), tδ_wrt(alternateFunction)]
+    });
+    console.log(require("@babel/generator").default(argument).code);
+    const returnIf = Node.ReturnStatement({ argument });
+
+    // Construct the revised statement list:
+    return [...statements.slice(0, firstIf), returnIf];
 }
 
 function removeEmptyStatements(statements)
