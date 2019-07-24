@@ -9,10 +9,5 @@
   "keywords": [],
   "author": "Francisco Ryan Tolmasky I",
   "license": "MIT",
-  "dependencies": {
-    "@babel/core": "^7.4.5",
-    "@babel/parser": "^7.4.5",
-    "@babel/template": "^7.4.4",
-    "@babel/types": "^7.4.4"
-  }
+  "dependencies": {}
 }
