@@ -42,6 +42,17 @@ module.exports = map(
         return Scope.with(withUpdatedChildren, scope);
     },
 
+    Function(map, node)
+    {
+        const fReduced = map.as("Node", node);
+        const bound = t.isStatement(fReduced) ?
+            Scope.fromBound(fReduced.id.name) : Scope.identity;
+        const scope = Scope.concat(bound,
+            Scope.justFree(Scope.for(fReduced)));
+
+        return Scope.with(fReduced, scope);
+    },
+
     BlockStatement(map, statement)
     {
         const statements = map.children(statement.body);

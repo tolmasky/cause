@@ -104,7 +104,6 @@ function fromAST(symbols, fAST)
     const t_thunk = template(expression => () => expression);
     const t_defer = expression =>
         t.isCallExpression(expression) &&
-        t.isIdentifier(expression.callee) &&
         expression.arguments.length === 0 ?
             expression.callee :
             t_thunk(expression);
@@ -333,8 +332,8 @@ function fromAST(symbols, fAST)
         const dependenciesT = Type.concat(calleeT, argumentsT);
 
         if (is (Type.State, dependenciesT))
-        {
-            const lifted = calleeT !== Type.fToState;
+        {console.log("--> " + calleeT);
+            const lifted = false;//calleeT !== Type.Value;//Type.fToState;
             const wrappedArguments = argumentPairs.map(
                 ([argumentT, argument]) => is(Type.State, argumentT) ?
                     argument : tδ_success(argument));
