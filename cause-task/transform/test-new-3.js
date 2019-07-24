@@ -1,14 +1,62 @@
+
+const plugin = require("@autopar/babel-plugin");
+const transform = require("@babel/core").transform;
+
+console.log(transform(`
+
+parallel function f()
+{
+    if (wrt[f]())
+        return 5;
+
+    return wrt[c]() + f(wrt[a], wrt[b], wrt[c](d));
+}
+
+parallel function testConcurrent()
+{
+    const result1 = wrt[a]() + wrt[b]();
+    const result2 = f(result1) + wrt[c](result1);
+    const result3 = [1,2,3].map(wrt[d]).reduce(f, result2);
+    const result4 = wrt[c](wrt[a]());
+    
+    if (wrt[d](result4))
+        return wrt[p]();
+
+    if (wrt[d](result4) + 1)
+        throw wrt[p]();
+
+    if (wrt[e](result4) + 2)
+    {
+        const result7 = wrt[u]();
+
+        return result7 + wrt[y]();
+    }
+
+    return result3;
+}
+
+`, { plugins: [plugin] }).code);
+
+/*
+
 const generate = node => require("@babel/generator").default(node).code
 const parse = require("@algebraic/ast/parse").expression;
+const autobranch = require("autopar/differentiate");
 
 //const node = require("./map-conc")(parse( WRAP+""));
-const node = require("./map-conc")(parse((() => parallel(() =>
+const node = autopar(parse((() => parallel(() =>
 {
     if (wrt[f]())
         return 5;
 
     return wrt[c]() + f(wrt[a], wrt[b], wrt[c](d));
 }))+ ""));
+
+parallel function (x)
+{
+    return branch[f]() + branch[g]();
+}
+
 
 /*
     const a = wrt[b]();
@@ -34,7 +82,7 @@ return c();
 */
 
 //console.log(node);
-console.log(generate(node));
+//console.log(generate(node));
 
 
 /*
@@ -55,7 +103,7 @@ console.log(require("@babel/generator").default(concurrent).code);
 
 // Scope boundary
 
-
+/*
 function testConcurrent()
 {
     const result1 = wrt[a]() + wrt[b]();
@@ -110,7 +158,7 @@ function testConcurrent2()
 
         return result7 + wrt[y]();
     }
-*/
+*//*
     return if_ (result5, () => stuff, () => other_stuff);;
     
     function a_function()
@@ -148,4 +196,4 @@ function bFunctionName(bFunctionParameter)
         { b6, hidden11: [b7, ...b8], ...b9 } } = f10;
     
     const [b10 = f11] = f12;
-}
+}*/
