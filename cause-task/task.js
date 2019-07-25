@@ -54,12 +54,13 @@ Task.fromResolvedCall = function (self, fUnknown, args)
         (async function ()
         {
             push(Started);
+            console.log("IN HERE FOR " + fUnknown);
             push(Task.Success({ value: await fUnknown.apply(self, args) }));
         })().catch(error => push(Task.Failure({ error })));
     };
 
-    start.toString = function () { return (fAsync+"").substr(0,100); }
-    start[inspect] = function () { return (fAsync+"").substr(0,100); }
+    start.toString = function () { return (fUnknown+"").substr(0,100); }
+    start[inspect] = function () { return (fUnknown+"").substr(0,100); }
     const cause = Cause(any)({ start });
 
     return Task.Initial({ cause });
