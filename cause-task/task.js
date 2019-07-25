@@ -25,7 +25,7 @@ Task.Initial.update = update
     [
         Task.Running({ ...initial }),
         [Task.Running({ ...initial })]
-    ]);
+    ])
 
 Task.Running.update = update
     .on(Task.Success, (initial, event) =>
@@ -33,21 +33,31 @@ Task.Running.update = update
     .on(Task.Failure, (waiting, event) =>
         [event, [event]]);
 
+const TaskReturningSymbol = Symbol("@cause/task:task-returning");
+
+Task.taskReturning = f => Object.assign(f, { [TaskReturningSymbol]: true });
+Task.isTaskReturning = f => !!f[TaskReturningSymbol];
+
 Task.fromAsync = function (fAsync)
 {
-    return (...args) => Task.fromAsyncCall(fAsync, ...args);
+    return (...args) => Task.fromAsyncCall(null, fAsync, ...args);
 }
 
-Task.fromAsyncCall = function (fAsync, ...args)
+Task.fromAsyncCall =
+Task.fromResolvedCall = function (self, fUnknown, args)
 {
     const start = function start (push)
     {
-        fAsync(...args)
-            .then(value => push(Task.Success({ value })))
-            .catch(error => push(Task.Failure({ error })));
-
-        push(Started);
+        // Even if f was known to be a Promise-returning function, it can still
+        // throw during the initial calling phase and thus not be handled by
+        // .catch.
+        (async function ()
+        {
+            push(Started);
+            push(Task.Success({ value: await fUnknown.apply(self, args) }));
+        })().catch(error => push(Task.Failure({ error })));
     };
+
     start.toString = function () { return (fAsync+"").substr(0,100); }
     start[inspect] = function () { return (fAsync+"").substr(0,100); }
     const cause = Cause(any)({ start });

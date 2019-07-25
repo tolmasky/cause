@@ -11,7 +11,6 @@ const Argument = data `Argument` (
 const Dependent  = union `Task.Dependent` (
 
     data `Blocked` (
-        lifted          => boolean,
         blocked         => [List(Argument), List(Argument)()],
         running         => [List(Argument), List(Argument)()],
         completed       => [List(Argument), List(Argument)()] ),
@@ -63,7 +62,7 @@ Dependency.Completed = union `Task.Dependency.Completed` (
     Dependency.Success,
     Dependency.Failure );
 
-Dependent.from = Dependent.wrap = function from({ lifted, callee, arguments })
+Dependent.fromCall = function fromCall({ callee, arguments })
 {
     const dependencies = List(Argument)([callee, ...arguments].map(
         (dependency, index) => Argument({ index: index - 1, dependency })));
@@ -74,7 +73,7 @@ Dependent.from = Dependent.wrap = function from({ lifted, callee, arguments })
     const completed = dependencies.filter(({ dependency }) =>
         is(Dependency.Completed, dependency));
 
-    return Dependent.from({ lifted, blocked, running, completed });
+    return Dependent.from({ blocked, running, completed });
 }
 
 Dependent.Blocked.update = update
@@ -100,10 +99,10 @@ Dependent.Blocked.update = update
         return is(Dependent.Blocked, updated) ? updated : andEvents(updated);
     });
 
-Dependent.from = function({ lifted = false, blocked, running, completed })
+Dependent.from = function({ blocked, running, completed })
 {
     if (blocked.size > 0 || running.size > 0)
-        return Dependent.Blocked({ lifted, blocked, running, completed });
+        return Dependent.Blocked({ blocked, running, completed });
 
     const successes = completed
         .filter(({ dependency }) =>
@@ -120,14 +119,14 @@ Dependent.from = function({ lifted = false, blocked, running, completed })
             Dependent.DependencyFailure({ failures });
     }
 
-    const [f, ...arguments] = successes
+    const [f, ...args] = successes
         .sortBy(({ index }) => index)
         .map(({ dependency }) => dependency.value);
-    const value = f(...arguments);
+    const task = f(...args);
 
-    return  lifted ? Dependent.Success({ value }) :
-            is(Dependency.Success, value) ? Dependent.Success({ ...value }) :
-            Dependent.Running({ task: value });
+    return is(Dependency.Success, task) ?
+        Dependent.Success({ ...task }) :
+        Dependent.Running({ task });
 }
 
 Dependent.Running.update = update

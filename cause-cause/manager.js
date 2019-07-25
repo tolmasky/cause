@@ -150,7 +150,7 @@ function getComputedDescendentIOs(node)
                     NoDescendentIOs) :
             data.fields(type)
                 .reduce(accumulate(
-                    ([key]) => key,
+                    ({ name }) => name,
                     (key, object) => object[key]),
                     NoDescendentIOs);
 
