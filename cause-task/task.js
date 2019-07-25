@@ -54,7 +54,10 @@ Task.fromResolvedCall = function (self, fUnknown, args)
         (async function ()
         {
             push(Started);
-            console.log("IN HERE FOR " + fUnknown);
+
+            if (process.env.TASK_DEBUG)
+                console.log("IN HERE FOR " + fUnknown);
+
             push(Task.Success({ value: await fUnknown.apply(self, args) }));
         })().catch(error => push(Task.Failure({ error })));
     };
