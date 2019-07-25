@@ -1,0 +1,17 @@
+{
+  "name": "@cause/pool_",
+  "version": "1.0.0-alpha.16",
+  "description": "",
+  "main": "pool.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Francisco Ryan Tolmasky I",
+  "dependencies": {},
+  "peerDependencies": {
+    "@cause/cause": "1.0.0-alpha.16",
+    "immutable": "^3.8.2"
+  },
+  "license": "MIT"
+}
