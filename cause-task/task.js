@@ -40,7 +40,8 @@ Task.isTaskReturning = f => !!f[TaskReturningSymbol];
 
 Task.fromAsync = function (fAsync)
 {
-    return (...args) => Task.fromAsyncCall(null, fAsync, ...args);
+    return Task.taskReturning((...args) =>
+        Task.fromAsyncCall(null, fAsync, ...args));
 }
 
 Task.fromAsyncCall =

@@ -62,9 +62,9 @@ Dependency.Completed = union `Task.Dependency.Completed` (
     Dependency.Success,
     Dependency.Failure );
 
-Dependent.fromCall = function fromCall({ callee, arguments })
+Dependent.fromCall = function fromCall({ callee, args })
 {
-    const dependencies = List(Argument)([callee, ...arguments].map(
+    const dependencies = List(Argument)([callee, ...args].map(
         (dependency, index) => Argument({ index: index - 1, dependency })));
     const blocked = dependencies.filter(({ dependency }) =>
         is(Dependency.Blocked, dependency));
