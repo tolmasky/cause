@@ -2,8 +2,8 @@ const {  promises: fs, existsSync } = require("fs");
 const { fromAsync, fromAsyncCall } = require("./task");
 const andReturnPath = (f, index = 0) =>
     (...args) =>
-        fromAsyncCall((...args) =>
-            f(...args).then(() => args[index]), ...args);
+        fromAsyncCall(null, (...args) =>
+            f(...args).then(() => args[index]), args);
 
 const mkdir = andReturnPath(fs.mkdir);
 

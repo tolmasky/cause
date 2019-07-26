@@ -1,5 +1,5 @@
 const { data, number, string } = require("@algebraic/type");
-const { fromAsyncCall } = require("./task");
+const Task = require("./task");
 const { spawn: spawnAsync } = require("child_process");
 const { Readable } = require("stream");
 const { hasOwnProperty } = Object;
@@ -13,18 +13,16 @@ const ExitedWithError = data `Task.Spawn.ExitedWithError` (
     exitCode    => number,
     stderr      => string );
 
-module.exports = spawn;
-
-module.exports.stdout = function (...args)
+module.exports.stdout = parallel function (...args)
 {
-    return δ(spawn(...args)).stdout;
+    return (branch spawn(...args)).stdout;
 }
 
 module.exports.lastline = output => output.match(/([^\n]*)\n$/)[1];
 
-function spawn(command, args = [], options = { })
+const spawn = Task.taskReturning(function spawn(command, args = [], options = { })
 {
-    return fromAsyncCall(function ()
+    return Task.fromAsyncCall(null, function ()
     {
         return new Promise(function (resolve, reject)
         {
@@ -57,4 +55,6 @@ function spawn(command, args = [], options = { })
             process.stderr.on("data", data => output.stderr += data);
         });
     });
-}
+});
+
+module.exports = spawn;
