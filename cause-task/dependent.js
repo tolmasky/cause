@@ -1,68 +1,42 @@
 const { data, union, any, boolean, number, is, of } = require("@algebraic/type");
 const { List, Map } = require("@algebraic/collections");
-const update = require("@cause/cause/update");
-const Task = require("./task");
 
-Error.stackTraceLimit = 1000;
+const update = require("@cause/cause/update");
+
 const Argument = data `Argument` (
     index       => number,
     dependency  => Dependency );
 
 const Dependent  = union `Task.Dependent` (
-
     data `Blocked` (
+        bind            => any,
+        then            => Function,
         blocked         => [List(Argument), List(Argument)()],
         running         => [List(Argument), List(Argument)()],
-        completed       => [List(Argument), List(Argument)()] ),
+        failures        => [List(Argument), List(Argument)()],
+        successes       => [List(Argument), List(Argument)()] ),
 
-    // FIXME: we need this or because it gets changed from underneath us!
     data `Running` (
-        task            => Dependency ),
+        consequent      => Task ),
 
-    data `Success` (
+    data `Task.Dependent.Success` (
         value           => any ),
 
-    data `InternalFailure` (
-        failure         => Dependency.Failure ),
+    union `Failure` (
+        data `Dependencies` (
+            failure     =>  Task.Failure ),
 
-    data `DependencyFailure` (
-        failures        => List(Dependency.Failure) ) );
+        data `Branched` (
+            failured    =>  Task.Failure ),
+
+        data `Synchronous` (
+            error       =>  any ) ) );
 
 module.exports = Dependent;
 
 Dependent.Dependent = Dependent;
 
-Dependent.Progressed = union `Task.Dependent.Progressed` (
-    Dependent.Running );
-
-const Dependency = union `Task.Dependency` (
-    Task,
-    Dependent );
-
-Dependent.Dependency = Dependency;
-
-Dependency.Blocked = union `Task.Dependency.Blocked` (
-    Dependent.Blocked,
-    Task.Initial )
-
-Dependency.Running = union `Task.Dependency.Running` (
-    union `one` ( Task.Running ),
-    union `two` ( Dependent.Running ) );
-
-Dependency.Success = union `Task.Dependency.Success` (
-    union `one` ( Task.Success ),
-    union `two` ( Dependent.Success ) );
-
-Dependency.Failure = union `Task.Dependency.Failure` (
-    Task.Failure,
-    Dependent.InternalFailure,
-    Dependent.DependencyFailure );
-
-Dependency.Completed = union `Task.Dependency.Completed` (
-    Dependency.Success,
-    Dependency.Failure );
-
-Dependent.fromCall = function fromCall({ callee, args })
+Dependent.fromCall = function fromCall({ bind, then, args })
 {
     const dependencies = List(Argument)([callee, ...args].map(
         (dependency, index) => Argument({ index: index - 1, dependency })));
@@ -73,7 +47,7 @@ Dependent.fromCall = function fromCall({ callee, args })
     const completed = dependencies.filter(({ dependency }) =>
         is(Dependency.Completed, dependency));
 
-    return Dependent.from({ blocked, running, completed });
+    return Dependent.from({ bind, propagate, blocked, running, completed });
 }
 
 Dependent.Blocked.update = update
@@ -99,34 +73,41 @@ Dependent.Blocked.update = update
         return is(Dependent.Blocked, updated) ? updated : andEvents(updated);
     });
 
-Dependent.from = function({ blocked, running, completed })
+Dependent.from = function(fields)
 {
-    if (blocked.size > 0 || running.size > 0)
-        return Dependent.Blocked({ blocked, running, completed });
+    if (fields.running.size > 0)
+        return Dependent.Blocked(fields);
 
-    const successes = completed
-        .filter(({ dependency }) =>
-            is(Dependency.Success, dependency));
-
-    if (successes.size !== completed.size)
+    if (fields.failures.size > 0)
     {
-        const failures = completed
-            .filter(({ dependency }) =>
-                is(Dependency.Failure, dependency));
+        const failures = fields.failures
+            .map(argument => argument.dependency);
 
-        return failures.size === 1 ?
-            failures.get(0).dependency :
-            Dependent.DependencyFailure({ failures });
+        return Dependent.Failure.Dependencies({ failures });
     }
 
-    const [f, ...args] = successes
+    if (fields.blocked.size > 0)
+        return Dependent.Blocked(fields);
+
+    const { bind, then } = fields;
+    const args = successes
         .sortBy(({ index }) => index)
         .map(({ dependency }) => dependency.value);
-    const task = f(...args);
 
-    return is(Dependency.Success, task) ?
-        Dependent.Success({ ...task }) :
-        Dependent.Running({ task });
+    try
+    {
+        const task = then.apply(bind, args);
+
+        return is (Task.Failure, task) ?
+            Dependent.Failure.Branched({ failure: task }) :
+            is(Task.Success, task) ?
+                Dependent.Success({ ...task }) :
+                Dependent.Running({ consequent: task });
+    }
+    catch (error)
+    {
+        return Dependent.Failure.Synchronous({ failure: task });
+    }
 }
 
 Dependent.Running.update = update
@@ -145,21 +126,7 @@ function andEvents(value)
 }
 
 
-function toPromiseThen(onResolve, onReject)
-{
-    return require("@cause/cause/to-promise")(Object, this).then(onResolve, onReject);
-}
-
-function toPromiseCatch(onReject)
-{
-    return require("@cause/cause/to-promise")(Object, this).catch(onReject);
-}
-
-for (const type of [...union.components(Task), ...union.components(Dependent)])
-{
-    type.prototype.then = toPromiseThen;
-    type.prototype.catch = toPromiseCatch;
-}
+const Task = require("./task");
 
 
 
