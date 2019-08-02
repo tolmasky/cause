@@ -4,7 +4,6 @@ const update = require("./update");
 const Manager = require("./manager");
 const getType = object => Object.getPrototypeOf(object).constructor;
 const Task = require("@cause/task");
-const { Dependency } = require("@cause/task/dependent");
 
 module.exports = function toPromise(T, root)
 {
@@ -12,11 +11,11 @@ module.exports = function toPromise(T, root)
     const promise = new Promise(function (resolve, reject)
     {
         const finish = dependency =>
-            is(Dependency.Success, dependency) ?
+            is(Task.Success, dependency) ?
                     resolve(dependency.value) :
                     reject(dependency.error);
 
-        if (is (Dependency.Completed, root))
+        if (is (Task.Completed, root))
             return finish(root);
 
         const deferredPush = event => setImmediate(function ()
@@ -25,7 +24,7 @@ module.exports = function toPromise(T, root)
             const finished = events.reduce((finished, event) =>
                 finished ||
                     void(channel.emit(event)) ||
-                    is(Dependency.Completed, event) && event,
+                    is(Task.Completed, event) && event,
                 null);
 
             // THE ONLY MUTATION!

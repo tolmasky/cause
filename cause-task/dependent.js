@@ -1,140 +1,129 @@
-const { data, union, any, boolean, number, is, of } = require("@algebraic/type");
-const { List, Map } = require("@algebraic/collections");
+const { data, union, any, number, is, of } = require("@algebraic/type");
+const { List } = require("@algebraic/collections");
 const update = require("@cause/cause/update");
 const Task = require("./task");
-
+console.log(Task);
 Error.stackTraceLimit = 1000;
-const Argument = data `Argument` (
+
+const Dependency = data `Dependency` (
     index       => number,
-    dependency  => Dependency );
+    task        => Task );
 
-const Dependent  = union `Task.Dependent` (
+const Dependent = union `Task.Dependent` (
 
+    // Blocked simply mean our dependencies aren't ready yet.
+    //
+    // There is no such thing as a "Waiting" state for a Dependent (or pre-run)
+    // state. The fact that we have created it necessarily represents that we
+    // have entered it.
     data `Blocked` (
-        blocked         => [List(Argument), List(Argument)()],
-        running         => [List(Argument), List(Argument)()],
-        completed       => [List(Argument), List(Argument)()] ),
+        name        => Task.Identifier,
+        consequent  => Function,
+        waiting     => List(Dependency),
+        active      => List(Dependency),
+        successes   => List(Dependency),
+        failures    => List(Dependency) ),
 
-    // FIXME: we need this or because it gets changed from underneath us!
-    data `Running` (
-        task            => Dependency ),
-
-    data `Success` (
-        value           => any ),
-
-    data `InternalFailure` (
-        failure         => Dependency.Failure ),
-
-    data `DependencyFailure` (
-        failures        => List(Dependency.Failure) ) );
+    // `task` might be "active" or possibly waiting itself, so it's not really
+    // appropriate to call this "Running". The only thing that is true at this
+    // this point is that we are unblocked.
+    //
+    // We also don't want to consider this a kind of "Waiting", because if we've
+    // gotten this far, it merits seeing it through, even if there is a peer
+    // failure. If we were a form of waiting, a peer failure would allow this to
+    // be canceled.
+    data `Unblocked` (
+        name        => Task.Identifier,
+        task        => Task ) );
 
 module.exports = Dependent;
 
-Dependent.Dependent = Dependent;
-
-Dependent.Progressed = union `Task.Dependent.Progressed` (
-    Dependent.Running );
-
-const Dependency = union `Task.Dependency` (
-    Task,
-    Dependent );
-
-Dependent.Dependency = Dependency;
-
-Dependency.Blocked = union `Task.Dependency.Blocked` (
-    Dependent.Blocked,
-    Task.Initial )
-
-Dependency.Running = union `Task.Dependency.Running` (
-    union `one` ( Task.Running ),
-    union `two` ( Dependent.Running ) );
-
-Dependency.Success = union `Task.Dependency.Success` (
-    union `one` ( Task.Success ),
-    union `two` ( Dependent.Success ) );
-
-Dependency.Failure = union `Task.Dependency.Failure` (
-    Task.Failure,
-    Dependent.InternalFailure,
-    Dependent.DependencyFailure );
-
-Dependency.Completed = union `Task.Dependency.Completed` (
-    Dependency.Success,
-    Dependency.Failure );
-
-Dependent.fromCall = function fromCall({ callee, args })
+Dependent.fromCall = function (consequent, args, name)
 {
-    const dependencies = List(Argument)([callee, ...args].map(
-        (dependency, index) => Argument({ index: index - 1, dependency })));
-    const blocked = dependencies.filter(({ dependency }) =>
-        is(Dependency.Blocked, dependency));
-    const running = dependencies.filter(({ dependency }) =>
-        is(Dependency.Running, dependency));
-    const completed = dependencies.filter(({ dependency }) =>
-        is(Dependency.Completed, dependency));
+    const dependencies = List(Dependency)(args)
+        .map((task, index) => Dependency({ task, index }));
 
-    return Dependent.from({ blocked, running, completed });
+    const waiting = dependencies.filter(is(Task.Waiting));
+    const active = dependencies.filter(is(Task.Active));
+    const successes = dependencies.filter(is(Task.Success));
+    const failures = dependencies.filter(is(Task.Failure));
+
+    return Dependent
+        .from({ name, consequent, waiting, active, successes, failures });
+}
+
+Dependent.from = function(fields)
+{
+    // Our current strategy is that we do not cancel active tasks.
+    if (fields.active.size > 0)
+        return Dependent.Blocked(fields);
+
+    const { name, consequent } = fields;
+
+    if (fields.failures.size > 0)
+        return tryCall(name, consequent, false, fields.failures);
+
+    if (fields.waiting.size > 0)
+        return Dependent.Blocked(fields);
+
+    // At this point we know everything left is successes.
+    return tryCall(name, consequent, true, fields.successes);
+}
+
+function tryCall(name, consequent, succeeded, dependencies)
+{
+    try
+    {
+        const completions = dependencies
+            .sortBy(({ index }) => index)
+            .map(dependency => dependency.task)
+        const result = consequent(succeeded, completions);
+
+        if (is (Task.Success, result))
+            return Task.Success({ ...result, name });
+
+        if (is (Task.Failure, result))
+            return of(result)({ ...result, name });
+
+        return Dependent.Unblocked({ name, task: result });
+    }
+    catch (value)
+    {
+        return Task.Failure.Direct({ name, value });
+    }
 }
 
 Dependent.Blocked.update = update
-    .on(Dependency.Running, (dependent, event, [_, index]) =>
+    .on(Task.Active, (dependent, event, [_, index]) =>
         Dependent.Blocked(
         {
             ...dependent,
-            running: dependent.running
-                .push(dependent.blocked.get(index)),
-            blocked: dependent.blocked.remove(index)
+            active: dependent.active
+                .push(dependent.waiting.get(index)),
+            waiting: dependent.waiting.remove(index)
         }) )
 
-    .on(Dependency.Completed, function (dependent, event, [previous, index])
+    .on(Task.Completed, function (dependent, event, [previous, index])
     {
+        const task = dependent[previous].get(index);
+        const next = is (Task.Success) ? "successes" : "failures";
         const updated = Dependent.from(
         {
             ...dependent,
             [previous]: dependent[previous].remove(index),
-            completed: dependent.completed
-                .push(dependent[previous].get(index))
+            [next]: dependent.successes.push(task)
         });
 
         return is(Dependent.Blocked, updated) ? updated : andEvents(updated);
     });
 
-Dependent.from = function({ blocked, running, completed })
-{
-    if (blocked.size > 0 || running.size > 0)
-        return Dependent.Blocked({ blocked, running, completed });
+Dependent.Unblocked.update = update
+    .on(Task.Success, ({ identifier }, event) =>
+        andEvents(Unblocked.Success({ ...event, identifier }) ) )
 
-    const successes = completed
-        .filter(({ dependency }) =>
-            is(Dependency.Success, dependency));
-
-    if (successes.size !== completed.size)
-    {
-        const failures = completed
-            .filter(({ dependency }) =>
-                is(Dependency.Failure, dependency));
-
-        return failures.size === 1 ?
-            failures.get(0).dependency :
-            Dependent.DependencyFailure({ failures });
-    }
-
-    const [f, ...args] = successes
-        .sortBy(({ index }) => index)
-        .map(({ dependency }) => dependency.value);
-    const task = f(...args);
-
-    return is(Dependency.Success, task) ?
-        Dependent.Success({ ...task }) :
-        Dependent.Running({ task });
-}
-
-Dependent.Running.update = update
-    .on(Dependency.Success, (running, event) =>
-        andEvents(Dependent.Success({ ...event }) ) )
-
-    .on(Dependency.Failure, (running, event) =>
-        andEvents(event) )//Dependent.InternalFailure({ failure: event }) ) )
+    .on(Dependency.Failure, ({ identifier }, event) =>
+        andEvents(Dependent.Failure
+            .Consequent({ identifier, failure: event }) ) )
 
     // Ignore anything else from the internal task.
     .on(any, dependent => [dependent, []]);
@@ -143,23 +132,3 @@ function andEvents(value)
 {
     return [value, [value]];
 }
-
-
-function toPromiseThen(onResolve, onReject)
-{
-    return require("@cause/cause/to-promise")(Object, this).then(onResolve, onReject);
-}
-
-function toPromiseCatch(onReject)
-{
-    return require("@cause/cause/to-promise")(Object, this).catch(onReject);
-}
-
-for (const type of [...union.components(Task), ...union.components(Dependent)])
-{
-    type.prototype.then = toPromiseThen;
-    type.prototype.catch = toPromiseCatch;
-}
-
-
-
