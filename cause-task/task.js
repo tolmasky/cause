@@ -18,16 +18,16 @@ Task.Failure = union `Task.Failure` (
     or      =>  Task.Failure.Aggregate );
 
 Task.Failure.Direct = data `Task.Failure.Direct` (
-    name    =>  Task.Identifier,
-    value   =>  any );
+    name        =>  Task.Identifier,
+    value       =>  any );
 
 Task.Failure.Aggregate = data `Task.Failure.Aggregate` (
-    name    =>  Task.Identifier,
-    value   =>  any );
+    name        =>  Task.Identifier,
+    failures    =>  List(Task.Failure) );
 
 Task.Success = data `Task.Success` (
-    name    => Task.Identifier,
-    value   => value );
+    name        =>  Task.Identifier,
+    value       =>  any );
 
 Task.Completed = union `Task.Completed` (
     is  =>  Task.Success,

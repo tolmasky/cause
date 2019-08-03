@@ -2,7 +2,7 @@ const { data, union, any, number, is, of } = require("@algebraic/type");
 const { List } = require("@algebraic/collections");
 const update = require("@cause/cause/update");
 const Task = require("./task");
-console.log(Task);
+
 Error.stackTraceLimit = 1000;
 
 const Dependency = data `Dependency` (
@@ -42,11 +42,12 @@ Dependent.fromCall = function (consequent, args, name)
 {
     const dependencies = List(Dependency)(args)
         .map((task, index) => Dependency({ task, index }));
+    const dependencyIs = type => dependency => is (type, dependency.task);
 
-    const waiting = dependencies.filter(is(Task.Waiting));
-    const active = dependencies.filter(is(Task.Active));
-    const successes = dependencies.filter(is(Task.Success));
-    const failures = dependencies.filter(is(Task.Failure));
+    const waiting = dependencies.filter(dependencyIs(Task.Waiting));
+    const active = dependencies.filter(dependencyIs(Task.Active));
+    const successes = dependencies.filter(dependencyIs(Task.Success));
+    const failures = dependencies.filter(dependencyIs(Task.Failure));
 
     return Dependent
         .from({ name, consequent, waiting, active, successes, failures });
@@ -76,7 +77,7 @@ function tryCall(name, consequent, succeeded, dependencies)
     {
         const completions = dependencies
             .sortBy(({ index }) => index)
-            .map(dependency => dependency.task)
+            .map(dependency => dependency.task);
         const result = consequent(succeeded, completions);
 
         if (is (Task.Success, result))
@@ -118,12 +119,10 @@ Dependent.Blocked.update = update
     });
 
 Dependent.Unblocked.update = update
-    .on(Task.Success, ({ identifier }, event) =>
-        andEvents(Unblocked.Success({ ...event, identifier }) ) )
+    .on(Task.Success, ({ name }, event) =>
+        andEvents(Task.Success({ ...event, name }) ) )
 
-    .on(Dependency.Failure, ({ identifier }, event) =>
-        andEvents(Dependent.Failure
-            .Consequent({ identifier, failure: event }) ) )
+    .on(Task.Failure, (unblocked, event) => andEvents(event) )
 
     // Ignore anything else from the internal task.
     .on(any, dependent => [dependent, []]);
