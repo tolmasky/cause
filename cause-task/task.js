@@ -1,7 +1,9 @@
 const { data, any, string } = require("@algebraic/type");
 const Optional = require("@algebraic/type/optional");
+const { List } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
 const inspect = Symbol.for("nodejs.util.inspect.custom");
+const Cause = require("@cause/cause");
 
 const Task = union `Task` (
     is      =>  Task.Waiting,
@@ -84,6 +86,11 @@ Task.fromAsync = function (fAsync)
 Task.fromAsyncCall =
 Task.fromResolvedCall = function (self, fUnknown, args = [])
 {
+    if (typeof fUnknown !== "function")
+        return Task.Failure.Direct({ value:
+            Error("Passed non-function to fromResolvedCall") });
+
+    const name = fUnknown.name;
     const start = function start (push)
     {
         // Even if f was known to be a Promise-returning function, it can still
@@ -97,12 +104,12 @@ Task.fromResolvedCall = function (self, fUnknown, args = [])
                 console.log("IN HERE FOR " + fUnknown);
 
             push(Task.Success({ value: await fUnknown.apply(self, args) }));
-        })().catch(error => push(Task.Failure({ error })));
+        })().catch(value => push(Task.Failure.Direct({ name, value })));
     };
 
     start.toString = function () { return (fUnknown+"").substr(0,100); }
     start[inspect] = function () { return (fUnknown+"").substr(0,100); }
     const cause = Cause(any)({ start });
 
-    return Task.Initial({ cause });
+    return Independent.Waiting({ cause });
 }

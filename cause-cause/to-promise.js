@@ -36,7 +36,7 @@ module.exports = function toPromise(T, root)
 //    global.should_show_up = false;
 }
             if (finished)
-                is(Dependency.Success, finished) ?
+                is(Task.Success, finished) ?
                     resolve(finished.value) : reject(finished.error);
         });
         const type = getType(root);

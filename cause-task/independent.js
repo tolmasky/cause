@@ -18,11 +18,13 @@ Independent.Waiting.update = update
         Task.Running({ ...initial }),
         [Task.Running({ ...initial })]
     ])
+    .on(Task.Failure, (waiting, event) =>
+        [event, [event]]);
 
 Independent.Running.update = update
     .on(Task.Success, (initial, event) =>
         [event, [event]])
-    .on(Independent.Failure, (waiting, event) =>
+    .on(Task.Failure, (waiting, event) =>
         [event, [event]]);
 
 module.exports = Independent;
