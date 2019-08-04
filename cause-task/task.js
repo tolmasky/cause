@@ -2,7 +2,6 @@ const { data, any, string } = require("@algebraic/type");
 const Optional = require("@algebraic/type/optional");
 const { List } = require("@algebraic/collections");
 const union = require("@algebraic/type/union-new");
-const inspect = Symbol.for("nodejs.util.inspect.custom");
 const Cause = require("@cause/cause");
 
 const Task = union `Task` (
@@ -84,32 +83,4 @@ Task.fromAsync = function (fAsync)
 }
 
 Task.fromAsyncCall =
-Task.fromResolvedCall = function (self, fUnknown, args = [])
-{
-    if (typeof fUnknown !== "function")
-        return Task.Failure.Direct({ value:
-            Error("Passed non-function to fromResolvedCall") });
-
-    const name = fUnknown.name;
-    const start = function start (push)
-    {
-        // Even if f was known to be a Promise-returning function, it can still
-        // throw during the initial calling phase and thus not be handled by
-        // .catch.
-        (async function ()
-        {
-            push(Started);
-
-            if (process.env.TASK_DEBUG)
-                console.log("IN HERE FOR " + fUnknown);
-
-            push(Task.Success({ value: await fUnknown.apply(self, args) }));
-        })().catch(value => push(Task.Failure.Direct({ name, value })));
-    };
-
-    start.toString = function () { return (fUnknown+"").substr(0,100); }
-    start[inspect] = function () { return (fUnknown+"").substr(0,100); }
-    const cause = Cause(any)({ start });
-
-    return Independent.Waiting({ cause });
-}
+Task.fromResolvedCall = Independent.fromResolvedCall;
