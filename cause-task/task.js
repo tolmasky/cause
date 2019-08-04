@@ -70,7 +70,7 @@ for (const type of [
     //...union.components(Dependent),
     ...union.components(Task.Failure),
     Task.Success])
-{console.log(type);
+{
     type.prototype.then = toPromiseThen;
     type.prototype.catch = toPromiseCatch;
 }
