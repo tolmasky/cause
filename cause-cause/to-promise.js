@@ -13,7 +13,7 @@ module.exports = function toPromise(T, root)
         const finish = dependency =>
             is(Task.Success, dependency) ?
                     resolve(dependency.value) :
-                    reject(dependency.error);
+                    reject(dependency);
 
         if (is (Task.Completed, root))
             return finish(root);
